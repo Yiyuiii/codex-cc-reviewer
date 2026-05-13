@@ -45,7 +45,7 @@ export const CcReviewInputSchema = z.object({
   cwd: z.string().trim().min(1).optional(),
   includeGitDiff: z.boolean().default(false),
   includeGitStatus: z.boolean().default(false),
-  redactSecrets: z.boolean().default(true),
+  redactSecrets: z.boolean().default(false),
   maxContextChars: z.number().int().min(1_000).max(1_000_000).default(120_000),
   stream: z.boolean().default(true),
   includePartialMessages: z.boolean().default(true),
@@ -63,6 +63,7 @@ export const CcReviewOutputSchema = z.object({
   structured: z.unknown().optional(),
   command: z.array(z.string()),
   eventsTail: z.array(z.string()).optional(),
+  transcriptTail: z.array(z.string()).optional(),
   eventCount: z.number().int().nonnegative().optional(),
   cache: z
     .object({

@@ -1,10 +1,20 @@
 # codex-cc-reviewer
 
+[English](README.md) | [简体中文](README.zh-CN.md)
+
 让 Codex 从 MCP 调用 Claude Code 做外部审阅。
 
-Codex 实现。Claude 挑错。Codex 决定。
+**Codex 实现。Claude 挑错。Codex 决定。**
 
-`codex-cc-reviewer` 是一个很窄的 Codex 侧 MCP server。它会用 headless 模式启动 Claude Code，把稳定的 review packet 交给 Claude 审阅，然后把结果返回给 Codex。
+`codex-cc-reviewer` 是一个聚焦的 MCP server，适合把 Codex 当主控实现者、同时希望 Claude Code 做高强度第二审查的开发者。它会 headless 启动 Claude Code，发送结构化 review packet，捕获 Claude Code 的 `stream-json` 活动，并把审查结果返回给 Codex。
+
+## 为什么
+
+- 编码前审查实现计划。
+- 最终回复或提交前审查 diff。
+- 对高风险变更做 adversarial review。
+- 保持 Codex 主控，而不是做一个泛化多 agent bridge。
+- 能看到 Claude Code 做了什么：工具活动、 transcript 片段、缓存统计和成本。
 
 ## 安装
 
@@ -22,7 +32,7 @@ command = "npx"
 args = ["-y", "codex-cc-reviewer", "serve"]
 startup_timeout_sec = 20
 tool_timeout_sec = 900
-required = true
+required = false
 enabled = true
 enabled_tools = ["cc_review"]
 ```
@@ -38,20 +48,46 @@ MCP server 只暴露一个工具：`cc_review`。
 ```json
 {
   "task": "review_diff",
-  "context": "请审阅当前改动是否有回归风险。",
+  "prompt": "请重点审查正确性、回归风险和遗漏测试。",
+  "context": "请审阅当前改动。",
   "includeGitDiff": true
 }
 ```
 
-也可以不经过 Codex，直接本地测试：
+本地 CLI 测试：
 
 ```bash
-codex-cc-reviewer review --task review_plan --context "请审阅这个实现计划..."
+codex-cc-reviewer review --task review_plan --prompt "审查这个计划" --context "..."
 ```
 
 ## 默认策略
 
-默认使用 Claude Code 的 `opus` 模型、`max` effort、`bypassPermissions` 权限模式和 `default` 工具集。这是深度自治审查模式，适合你信任的本地工作区；不要在不可信仓库或非隔离环境中使用。
+这个包默认面向可信本地 owner workflow：
 
-默认启用 `stream-json` 捕获。MCP 仍然一次性返回结果，但返回文本会附带 Claude Code 最近的活动摘要、缓存 token 统计和成本信息。
+- `model`: `opus`
+- `effort`: `max`
+- `permissionMode`: `bypassPermissions`
+- `tools`: `default`
+- `stream`: `true`
+- `cacheTtl`: `1h`
+- `redactSecrets`: `false`
 
+默认尽量按原文传递 review packet。脱敏是可选项，因为改写文本可能会破坏有用证据。
+
+## Codex 会收到什么
+
+最终 MCP 结果包含：
+
+- Claude 的审查正文
+- Claude Code 最近的工具/活动事件
+- stream 输出里的最近 transcript 片段
+- Claude 报告的 prompt cache creation/read token
+- Claude 报告的成本
+
+MCP 仍然是在 Claude Code 结束后一次性返回。实时 MCP progress notification 是后续功能。
+
+## 安全
+
+默认模式非常强。只在你控制的可信仓库、VM、dev container 或本地工作区中使用。需要收窄时，显式覆盖 `permissionMode`、`tools` 和 `redactSecrets`。
+
+更多信息见 [docs/security.md](docs/security.md) 和 [docs/tool-contract.md](docs/tool-contract.md)。

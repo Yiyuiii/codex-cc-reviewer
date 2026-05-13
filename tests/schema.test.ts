@@ -17,7 +17,7 @@ describe("CcReviewInputSchema", () => {
     expect(parsed.maxTurns).toBe(8);
     expect(parsed.includeGitDiff).toBe(false);
     expect(parsed.includeGitStatus).toBe(false);
-    expect(parsed.redactSecrets).toBe(true);
+    expect(parsed.redactSecrets).toBe(false);
     expect(parsed.maxContextChars).toBe(120_000);
     expect(parsed.stream).toBe(true);
     expect(parsed.includePartialMessages).toBe(true);

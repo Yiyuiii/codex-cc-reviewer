@@ -16,6 +16,7 @@ describe("Codex config text mutation", () => {
     expect(countOccurrences(twice, "[mcp_servers.codex_cc_reviewer]")).toBe(1);
     expect(twice).toContain('command = "npx"');
     expect(twice).toContain('args = ["-y", "codex-cc-reviewer", "serve"]');
+    expect(twice).toContain("required = false");
     expect(twice).toContain('enabled_tools = ["cc_review"]');
   });
 

@@ -12,8 +12,9 @@ Default posture:
 - stream-json activity capture enabled
 - 1-hour prompt cache TTL hint enabled
 - no git status or diff unless requested
-- common secrets are redacted before the packet is sent
+- review packet content is sent as provided by default
+- `redactSecrets=true` enables best-effort redaction, but it may remove useful evidence and is not comprehensive
 
 This is intentionally optimized for a trusted owner workflow. `bypassPermissions` skips Claude Code permission checks and should not be used in untrusted repositories. Run in a sandbox, VM, dev container, or trusted local checkout.
 
-Claude Code is still an external process with access according to your local Claude settings and the tool allowlist you pass. Review the generated packet and keep sensitive repositories on explicit conservative settings when needed.
+Claude Code is still an external process with access according to your local Claude settings and the tool allowlist you pass. Review what you send and keep sensitive repositories on explicit conservative settings when needed.

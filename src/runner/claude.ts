@@ -64,6 +64,7 @@ export async function runClaudeReview(
     structured: parsed.structured,
     command: ["claude", ...args.map(redactLongArg)],
     eventsTail: parsed.eventsTail,
+    transcriptTail: parsed.transcriptTail,
     eventCount: parsed.eventCount,
     cache: parsed.cache,
     costUsd: parsed.costUsd,
@@ -125,12 +126,8 @@ export function buildClaudeArgs(input: CcReviewInput): string[] {
 }
 
 function buildClaudeEnv(input: CcReviewInput): Record<string, string> | undefined {
-  if (input.cacheTtl !== "1h") {
-    return undefined;
-  }
-
   return {
-    ENABLE_PROMPT_CACHING_1H: "1"
+    ENABLE_PROMPT_CACHING_1H: input.cacheTtl === "1h" ? "1" : "0"
   };
 }
 
@@ -138,6 +135,7 @@ interface ParsedClaudeOutput {
   review: string;
   structured?: unknown;
   eventsTail?: string[];
+  transcriptTail?: string[];
   eventCount?: number;
   cache?: {
     creationInputTokens?: number;
@@ -188,6 +186,7 @@ function parseClaudeStreamOutput(stdout: string): ParsedClaudeOutput {
   let costUsd: number | undefined;
   let eventCount = 0;
   const textDeltas: string[] = [];
+  const transcript: string[] = [];
 
   for (const line of stdout.split(/\r?\n/)) {
     const trimmed = line.trim();
@@ -211,6 +210,16 @@ function parseClaudeStreamOutput(stdout: string): ParsedClaudeOutput {
       if (deltaText) {
         textDeltas.push(deltaText);
       }
+      const summary = summarizeStreamTextDelta(event);
+      if (summary) {
+        events.push("text_delta");
+      }
+    }
+
+    const assistantText = getAssistantText(event);
+    if (assistantText) {
+      flushTextDeltas(textDeltas, transcript);
+      transcript.push(assistantText);
     }
 
     if (event.type === "result") {
@@ -229,10 +238,27 @@ function parseClaudeStreamOutput(stdout: string): ParsedClaudeOutput {
     review: review || textDeltas.join("") || stdout,
     structured,
     eventsTail: events.slice(-50),
+    transcriptTail: [...transcript, flushTextDeltas(textDeltas)].filter((item): item is string =>
+      Boolean(item)
+    ).slice(-20),
     eventCount,
     cache,
     costUsd
   };
+}
+
+function flushTextDeltas(buffer: string[], target?: string[]): string | undefined {
+  if (!buffer.length) {
+    return undefined;
+  }
+
+  const text = buffer.join("").trim();
+  buffer.length = 0;
+  if (text && target) {
+    target.push(text);
+  }
+
+  return text || undefined;
 }
 
 function summarizeStreamEvent(event: Record<string, unknown>): string | undefined {
@@ -263,6 +289,33 @@ function summarizeStreamEvent(event: Record<string, unknown>): string | undefine
   }
 
   return typeof event.type === "string" ? event.type : undefined;
+}
+
+function summarizeStreamTextDelta(event: Record<string, unknown>): string | undefined {
+  return getTextDelta(event) ? "text_delta" : undefined;
+}
+
+function getAssistantText(event: Record<string, unknown>): string | undefined {
+  if (event.type !== "assistant") {
+    return undefined;
+  }
+
+  const message = event.message as Record<string, unknown> | undefined;
+  const content = message?.content;
+  if (!Array.isArray(content)) {
+    return undefined;
+  }
+
+  const text = content
+    .map((item) => {
+      const block = item as Record<string, unknown>;
+      return block.type === "text" && typeof block.text === "string" ? block.text : "";
+    })
+    .filter(Boolean)
+    .join("\n")
+    .trim();
+
+  return text || undefined;
 }
 
 function summarizeAssistantMessage(event: Record<string, unknown>): string | undefined {

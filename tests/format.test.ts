@@ -13,6 +13,7 @@ describe("formatReviewResult", () => {
       review: "Main review.",
       command: ["claude"],
       eventsTail: ["system:init", "tool_use: Read {\"file_path\":\"README.md\"}", "result"],
+      transcriptTail: ["I will inspect the package.", "Intermediate finding."],
       eventCount: 3,
       cache: {
         creationInputTokens: 1000,
@@ -26,6 +27,8 @@ describe("formatReviewResult", () => {
     expect(formatted).toContain("Main review.");
     expect(formatted).toContain("## Claude Code Activity");
     expect(formatted).toContain("- tool_use: Read");
+    expect(formatted).toContain("## Claude Code Transcript");
+    expect(formatted).toContain("I will inspect the package.");
     expect(formatted).toContain("cache read tokens: 2000");
     expect(formatted).toContain("cost: $0.12");
   });

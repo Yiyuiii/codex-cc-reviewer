@@ -8,7 +8,7 @@ command = "npx"
 args = ["-y", "codex-cc-reviewer", "serve"]
 startup_timeout_sec = 20
 tool_timeout_sec = 900
-required = true
+required = false
 enabled = true
 enabled_tools = ["cc_review"]
 ```

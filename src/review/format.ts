@@ -12,7 +12,12 @@ export function formatReviewResult(result: CcReviewOutput): string {
 }
 
 function formatActivity(result: CcReviewOutput): string | undefined {
-  if (!result.eventsTail?.length && !result.cache && result.costUsd === undefined) {
+  if (
+    !result.eventsTail?.length &&
+    !result.transcriptTail?.length &&
+    !result.cache &&
+    result.costUsd === undefined
+  ) {
     return undefined;
   }
 
@@ -26,6 +31,13 @@ function formatActivity(result: CcReviewOutput): string | undefined {
     lines.push("recent events:");
     for (const event of result.eventsTail.slice(-20)) {
       lines.push(`- ${event}`);
+    }
+  }
+
+  if (result.transcriptTail?.length) {
+    lines.push("## Claude Code Transcript");
+    for (const text of result.transcriptTail.slice(-10)) {
+      lines.push(`- ${text}`);
     }
   }
 

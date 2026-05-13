@@ -18,6 +18,8 @@ Return actionable findings.
 Avoid vague advice.
 If something is good, say so briefly.
 If context is missing, list exactly what is missing.
+In the final response, include the complete review text that Codex should consume.
+Do not rely on earlier streamed messages as the only copy of important findings.
 
 When reviewing a plan:
 - Check whether the plan is feasible.

@@ -32,8 +32,27 @@ describe("runClaudeReview", () => {
         stdout: [
           JSON.stringify({ type: "system", subtype: "init", session_id: "abc" }),
           JSON.stringify({
+            type: "stream_event",
+            event: {
+              type: "content_block_delta",
+              delta: { type: "text_delta", text: "I will inspect " }
+            }
+          }),
+          JSON.stringify({
+            type: "stream_event",
+            event: {
+              type: "content_block_delta",
+              delta: { type: "text_delta", text: "the package." }
+            }
+          }),
+          JSON.stringify({
             type: "assistant",
-            message: { content: [{ type: "tool_use", name: "Read", input: { file_path: "README.md" } }] }
+            message: {
+              content: [
+                { type: "text", text: "Intermediate finding." },
+                { type: "tool_use", name: "Read", input: { file_path: "README.md" } }
+              ]
+            }
           }),
           JSON.stringify({
             type: "result",
@@ -61,10 +80,16 @@ describe("runClaudeReview", () => {
     expect(result.review).toBe("No findings.");
     expect(result.eventsTail).toEqual([
       "system:init",
+      "text_delta",
+      "text_delta",
       "tool_use: Read {\"file_path\":\"README.md\"}",
       "result"
     ]);
-    expect(result.eventCount).toBe(3);
+    expect(result.transcriptTail).toEqual([
+      "I will inspect the package.",
+      "Intermediate finding."
+    ]);
+    expect(result.eventCount).toBe(5);
     expect(result.cache).toEqual({
       creationInputTokens: 1000,
       readInputTokens: 2000
@@ -95,6 +120,33 @@ describe("runClaudeReview", () => {
     expect(observed?.[2].input).toBe("PACKET");
     expect(observed?.[2].reject).toBe(false);
     expect(observed?.[2].env?.ENABLE_PROMPT_CACHING_1H).toBe("1");
+  });
+
+  it("overrides inherited 1h cache env when cacheTtl is 5m", async () => {
+    let observed: Parameters<ClaudeExecutor> | undefined;
+    const execute: ClaudeExecutor = async (...args) => {
+      observed = args;
+      return {
+        stdout: JSON.stringify({ result: "No findings." }),
+        stderr: "",
+        exitCode: 0
+      };
+    };
+
+    await runClaudeReview(
+      {
+        ...baseInput,
+        stream: false,
+        cacheTtl: "5m"
+      },
+      {
+        execute,
+        now: fakeClock([1, 2]),
+        buildPacket: async () => "PACKET"
+      }
+    );
+
+    expect(observed?.[2].env?.ENABLE_PROMPT_CACHING_1H).toBe("0");
   });
 
   it("extracts structured output when Claude returns JSON schema output", async () => {

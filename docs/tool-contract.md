@@ -24,6 +24,7 @@ Input:
 - `includeHookEvents`: default `true`
 - `verbose`: default `true`
 - `cacheTtl`: `5m` or `1h`; default `1h`
+- `redactSecrets`: default `false`; set `true` for best-effort redaction
 
 Output:
 
@@ -35,6 +36,7 @@ Output:
 - `structured`
 - `command`
 - `eventsTail`
+- `transcriptTail`
 - `eventCount`
 - `cache`
 - `costUsd`

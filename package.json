@@ -1,6 +1,6 @@
 {
   "name": "codex-cc-reviewer",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Use Claude Code as an external reviewer from Codex.",
   "type": "module",
   "bin": {
