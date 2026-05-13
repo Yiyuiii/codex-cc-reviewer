@@ -22,6 +22,8 @@ It is intentionally narrow:
 
 Status: early `0.1.x`. The core workflow is usable, but the project is still pre-1.0 and intentionally conservative in scope.
 
+Proof of work: this project is roughly 99% developed and maintained by Codex itself, with Claude Code / Opus used through `cc_review` as an advisory reviewer.
+
 ## Why
 
 - Review implementation plans before coding.
