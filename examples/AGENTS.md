@@ -20,3 +20,13 @@ Default workflow:
 
 Do not blindly follow Claude. Codex remains responsible for the final answer.
 
+Default `cc_review` profile:
+
+- `model="opus"`
+- `effort="max"`
+- `permissionMode="bypassPermissions"`
+- `tools="default"`
+- streaming activity capture enabled
+- 1-hour cache TTL hint enabled
+
+Use this only in trusted local workspaces. Pass stricter values explicitly when reviewing untrusted code.

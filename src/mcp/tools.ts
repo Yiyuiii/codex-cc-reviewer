@@ -1,6 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 import { runClaudeReview } from "../runner/claude.js";
+import { formatReviewResult } from "../review/format.js";
 import { CcReviewInputSchema, CcReviewOutputSchema } from "../review/schema.js";
 
 export function registerCcReviewTool(server: McpServer): void {
@@ -27,7 +28,7 @@ export function registerCcReviewTool(server: McpServer): void {
         content: [
           {
             type: "text",
-            text: result.review
+            text: formatReviewResult(result)
           }
         ],
         structuredContent: result
@@ -35,4 +36,3 @@ export function registerCcReviewTool(server: McpServer): void {
     }
   );
 }
-

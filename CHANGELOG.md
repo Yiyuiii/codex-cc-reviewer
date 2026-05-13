@@ -6,5 +6,6 @@
 - Claude Code headless runner.
 - Local `review` CLI command.
 - `install`, `uninstall`, and `doctor` commands.
-- Safe defaults for reviewer-only usage.
-
+- Default deep autonomous review: `opus`, `max`, `bypassPermissions`, `default` tools.
+- Stream-json activity capture in final review output.
+- 1-hour prompt cache TTL hint.

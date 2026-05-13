@@ -1,4 +1,5 @@
 import { runClaudeReview } from "../runner/claude.js";
+import { formatReviewResult } from "../review/format.js";
 import { CcReviewInputSchema, type CcReviewInput, type CcReviewOutput } from "../review/schema.js";
 
 export interface LocalReviewOptions {
@@ -15,6 +16,11 @@ export interface LocalReviewOptions {
   cwd?: string;
   includeGitDiff?: boolean;
   includeGitStatus?: boolean;
+  stream?: boolean;
+  includePartialMessages?: boolean;
+  includeHookEvents?: boolean;
+  verbose?: boolean;
+  cacheTtl?: string;
 }
 
 export interface LocalReviewDeps {
@@ -35,7 +41,7 @@ export async function runLocalReview(
   const write = deps.write ?? ((text: string) => process.stdout.write(text));
   const result = await runReview(input);
 
-  write(`${result.review.trim()}\n`);
+  write(formatReviewResult(result));
 
   if (!result.ok) {
     process.exitCode = 1;
@@ -55,4 +61,3 @@ function coerceOptionalNumber(value: string | number | undefined): number | unde
 
   return Number(value);
 }
-

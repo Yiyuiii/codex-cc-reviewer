@@ -1,0 +1,32 @@
+import { describe, expect, it } from "vitest";
+
+import { formatReviewResult } from "../src/review/format.js";
+import type { CcReviewOutput } from "../src/review/schema.js";
+
+describe("formatReviewResult", () => {
+  it("includes Claude Code activity and cache usage after the review", () => {
+    const output: CcReviewOutput = {
+      ok: true,
+      task: "review_plan",
+      model: "opus",
+      elapsedMs: 100,
+      review: "Main review.",
+      command: ["claude"],
+      eventsTail: ["system:init", "tool_use: Read {\"file_path\":\"README.md\"}", "result"],
+      eventCount: 3,
+      cache: {
+        creationInputTokens: 1000,
+        readInputTokens: 2000
+      },
+      costUsd: 0.12
+    };
+
+    const formatted = formatReviewResult(output);
+
+    expect(formatted).toContain("Main review.");
+    expect(formatted).toContain("## Claude Code Activity");
+    expect(formatted).toContain("- tool_use: Read");
+    expect(formatted).toContain("cache read tokens: 2000");
+    expect(formatted).toContain("cost: $0.12");
+  });
+});

@@ -9,16 +9,21 @@ Input:
 - `task`: `review_plan`, `review_diff`, `review_doc`, or `adversarial_review`
 - `context`: required review context
 - `prompt`: optional extra goal
-- `model`: default `sonnet`
-- `effort`: default `high`
+- `model`: default `opus`
+- `effort`: default `max`
 - `output`: `markdown` or `json`
-- `permissionMode`: `default`, `plan`, or `dontAsk`; default `plan`
-- `tools`: string or array; default `["Read"]`
+- `permissionMode`: `acceptEdits`, `auto`, `bypassPermissions`, `default`, `dontAsk`, or `plan`; default `bypassPermissions`
+- `tools`: string or array; default `["default"]`
 - `maxTurns`: default `8`
 - `maxBudgetUsd`: optional
 - `cwd`: optional working directory
 - `includeGitDiff`: default `false`
 - `includeGitStatus`: default `false`
+- `stream`: default `true`; uses Claude Code `stream-json`
+- `includePartialMessages`: default `true`
+- `includeHookEvents`: default `true`
+- `verbose`: default `true`
+- `cacheTtl`: `5m` or `1h`; default `1h`
 
 Output:
 
@@ -29,6 +34,11 @@ Output:
 - `review`
 - `structured`
 - `command`
+- `eventsTail`
+- `eventCount`
+- `cache`
+- `costUsd`
 - `stderrTail`
 - `exitCode`
 
+MCP tool calls still return once after Claude Code exits. Streaming is captured and summarized in the final result; real-time MCP progress notifications are not implemented yet.

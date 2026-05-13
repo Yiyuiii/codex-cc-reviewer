@@ -49,7 +49,9 @@ MCP server 只暴露一个工具：`cc_review`。
 codex-cc-reviewer review --task review_plan --context "请审阅这个实现计划..."
 ```
 
-## 安全默认值
+## 默认策略
 
-默认使用 Claude Code 的 `plan` 权限模式，只启用 `Read` 工具，并拒绝 `bypassPermissions`。Claude 只是 reviewer 子进程，不是主控 agent。
+默认使用 Claude Code 的 `opus` 模型、`max` effort、`bypassPermissions` 权限模式和 `default` 工具集。这是深度自治审查模式，适合你信任的本地工作区；不要在不可信仓库或非隔离环境中使用。
+
+默认启用 `stream-json` 捕获。MCP 仍然一次性返回结果，但返回文本会附带 Claude Code 最近的活动摘要、缓存 token 统计和成本信息。
 

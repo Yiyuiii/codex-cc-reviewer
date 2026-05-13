@@ -51,7 +51,15 @@ codex-cc-reviewer review --task review_plan --context "Review this implementatio
 
 ## Safety
 
-By default, Claude Code runs in `plan` permission mode with only the `Read` tool enabled. `bypassPermissions` is rejected. Claude is treated as a reviewer subprocess and should not edit files.
+By default, this package runs Claude Code in deep autonomous review mode:
+
+- `model`: `opus`
+- `effort`: `max`
+- `permissionMode`: `bypassPermissions`
+- `tools`: `default`
+- `stream`: `true`
+- `cacheTtl`: `1h`
+
+This is intentionally powerful. Use it only in trusted local workspaces or isolated environments. The MCP result includes a Claude Code activity summary, cache token stats, and cost when Claude reports them.
 
 See [docs/security.md](docs/security.md) and [docs/tool-contract.md](docs/tool-contract.md).
-

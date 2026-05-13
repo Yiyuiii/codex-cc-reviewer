@@ -1,6 +1,6 @@
 import { getGitDiff as defaultGetGitDiff } from "../git/diff.js";
 import { getGitStatus as defaultGetGitStatus } from "../git/status.js";
-import { JSON_OUTPUT_PROMPT, REVIEWER_PROMPT } from "./prompts.js";
+import { REVIEWER_PROMPT } from "./prompts.js";
 import type { CcReviewInput } from "./schema.js";
 
 export interface ReviewPacketDeps {
@@ -16,28 +16,9 @@ export async function buildReviewPacket(
   const getGitDiff = deps.getGitDiff ?? defaultGetGitDiff;
   const cwd = input.cwd ?? process.cwd();
 
-  const context = prepareBlock(input.context, input);
-  const goal = prepareBlock(input.prompt ?? "Not provided.", input);
-  const sections = [
-    "# Codex to Claude Code Review Packet",
-    "## Task Type",
-    input.task,
-    "## Codex Goal",
-    goal,
-    "## Current Context",
-    context
-  ];
-
-  if (input.includeGitStatus) {
-    const status = prepareBlock(await getGitStatus(cwd), input);
-    sections.push("## Optional Git Status", fenced(status, "text"));
-  }
-
-  if (input.includeGitDiff) {
-    const diff = prepareBlock(await getGitDiff(cwd), input);
-    sections.push("## Optional Git Diff", fenced(diff, "diff"));
-  }
-
+  const rawGitStatus = input.includeGitStatus ? await getGitStatus(cwd) : undefined;
+  const rawGitDiff = input.includeGitDiff ? await getGitDiff(cwd) : undefined;
+  const budgeted = prepareVariableBlocks(input, rawGitStatus, rawGitDiff);
   const instructions = [
     REVIEWER_PROMPT,
     "Act as an external reviewer.",
@@ -45,19 +26,69 @@ export async function buildReviewPacket(
     "Return concise, actionable findings."
   ];
 
-  if (input.output === "json") {
-    instructions.push(JSON_OUTPUT_PROMPT);
+  const sections = [
+    "# Codex to Claude Code Review Packet",
+    "## Review Instructions",
+    instructions.join("\n\n"),
+    "## Task Type",
+    input.task,
+    "## Codex Goal",
+    budgeted.goal,
+    "## Current Context",
+    budgeted.context
+  ];
+
+  if (budgeted.gitStatus !== undefined) {
+    sections.push("## Optional Git Status", fenced(budgeted.gitStatus, "text"));
   }
 
-  sections.push("## Review Instructions", instructions.join("\n\n"));
+  if (budgeted.gitDiff !== undefined) {
+    sections.push("## Optional Git Diff", fenced(budgeted.gitDiff, "diff"));
+  }
 
   return sections.join("\n\n").trim() + "\n";
 }
 
-function prepareBlock(value: string, input: CcReviewInput): string {
-  const redacted = input.redactSecrets ? redactSecrets(value) : value;
-  const blockBudget = Math.max(200, input.maxContextChars - 300);
-  return limitChars(redacted, blockBudget);
+interface VariableBlocks {
+  goal: string;
+  context: string;
+  gitStatus?: string;
+  gitDiff?: string;
+}
+
+function prepareVariableBlocks(
+  input: CcReviewInput,
+  rawGitStatus: string | undefined,
+  rawGitDiff: string | undefined
+): VariableBlocks {
+  const variableBudget = Math.max(300, input.maxContextChars - 500);
+  const blocks = [
+    { key: "goal", value: input.prompt ?? "Not provided.", weight: input.prompt ? 0.15 : 0.05 },
+    { key: "context", value: input.context, weight: 0.45 },
+    { key: "gitStatus", value: rawGitStatus, weight: rawGitStatus !== undefined ? 0.1 : 0 },
+    { key: "gitDiff", value: rawGitDiff, weight: rawGitDiff !== undefined ? 0.3 : 0 }
+  ] as const;
+  const totalWeight = blocks.reduce((sum, block) => sum + block.weight, 0);
+  const prepared: Partial<VariableBlocks> = {};
+
+  for (const block of blocks) {
+    if (block.value === undefined) continue;
+
+    const blockBudget = Math.max(100, Math.floor((variableBudget * block.weight) / totalWeight));
+    prepared[block.key] = prepareBlock(block.value, blockBudget, input.redactSecrets);
+  }
+
+  return {
+    goal: prepared.goal ?? "Not provided.",
+    context: prepared.context ?? "",
+    gitStatus: prepared.gitStatus,
+    gitDiff: prepared.gitDiff
+  };
+}
+
+function prepareBlock(value: string, maxChars: number, shouldRedact: boolean): string {
+  const redacted = shouldRedact ? redactSecrets(value) : value;
+  return limitChars(redacted, maxChars);
 }
 
 export function redactSecrets(value: string): string {

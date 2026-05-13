@@ -15,7 +15,12 @@ const baseInput: CcReviewInput = {
   includeGitDiff: false,
   includeGitStatus: false,
   redactSecrets: true,
-  maxContextChars: 120_000
+  maxContextChars: 120_000,
+  stream: true,
+  includePartialMessages: true,
+  includeHookEvents: true,
+  verbose: true,
+  cacheTtl: "1h"
 };
 
 describe("buildReviewPacket", () => {
@@ -30,6 +35,17 @@ describe("buildReviewPacket", () => {
     expect(packet).toContain("## Codex Goal\n\nFocus on regression risk.");
     expect(packet).toContain("## Current Context\n\nPlease review the diff for correctness.");
     expect(packet).toContain("## Review Instructions");
+  });
+
+  it("puts stable review instructions before variable context for better cache reuse", async () => {
+    const packet = await buildReviewPacket({
+      ...baseInput,
+      context: "volatile context"
+    });
+
+    expect(packet.indexOf("## Review Instructions")).toBeLessThan(
+      packet.indexOf("## Current Context")
+    );
   });
 
   it("injects git status and diff only when requested", async () => {
@@ -70,6 +86,26 @@ describe("buildReviewPacket", () => {
     });
 
     expect(packet.length).toBeLessThan(2_000);
+    expect(packet).toContain("[TRUNCATED");
+  });
+
+  it("applies the context limit to the whole packet budget, not each block independently", async () => {
+    const packet = await buildReviewPacket(
+      {
+        ...baseInput,
+        prompt: "p".repeat(2_000),
+        context: "c".repeat(2_000),
+        includeGitStatus: true,
+        includeGitDiff: true,
+        maxContextChars: 1_500
+      },
+      {
+        getGitStatus: async () => "s".repeat(2_000),
+        getGitDiff: async () => "d".repeat(2_000)
+      }
+    );
+
+    expect(packet.length).toBeLessThan(3_000);
     expect(packet).toContain("[TRUNCATED");
   });
 });

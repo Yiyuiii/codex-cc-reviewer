@@ -50,15 +50,20 @@ program
   .requiredOption("--context <context>", "Inline review context")
   .option("--prompt <prompt>", "Additional review goal")
   .option("--model <model>", "Claude model alias or full model name")
-  .option("--effort <effort>", "low | medium | high | xhigh | max")
+  .option("--effort <effort>", "low | medium | high | max")
   .option("--output <output>", "markdown | json")
-  .option("--permission-mode <mode>", "default | plan | dontAsk")
+  .option("--permission-mode <mode>", "acceptEdits | auto | bypassPermissions | default | dontAsk | plan")
   .option("--tools <tools>", "Comma-separated Claude Code tool allowlist")
   .option("--max-turns <turns>", "Maximum Claude turns")
   .option("--max-budget-usd <usd>", "Maximum Claude Code spend in USD")
   .option("--cwd <cwd>", "Working directory for Claude")
   .option("--include-git-diff", "Include git diff in the review packet")
   .option("--include-git-status", "Include git status in the review packet")
+  .option("--no-stream", "Disable Claude Code stream-json output")
+  .option("--no-include-partial-messages", "Disable partial message events when streaming")
+  .option("--no-include-hook-events", "Disable hook events when streaming")
+  .option("--no-verbose", "Disable Claude Code verbose mode when streaming")
+  .option("--cache-ttl <ttl>", "Prompt cache TTL hint: 5m | 1h")
   .action(async (options) => {
     await runLocalReview(options);
   });
