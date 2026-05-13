@@ -15,8 +15,10 @@ function formatActivity(result: CcReviewOutput): string | undefined {
   if (
     !result.eventsTail?.length &&
     !result.transcriptTail?.length &&
+    !result.activityTail?.length &&
     !result.cache &&
-    result.costUsd === undefined
+    result.costUsd === undefined &&
+    !result.diagnostics?.length
   ) {
     return undefined;
   }
@@ -41,8 +43,18 @@ function formatActivity(result: CcReviewOutput): string | undefined {
     }
   }
 
+  if (result.activityTail?.length) {
+    lines.push("## Claude Code Timeline");
+    for (const event of result.activityTail.slice(-20)) {
+      lines.push(`- #${event.index} ${event.kind} ${event.rawType}: ${event.summary}`);
+    }
+  }
+
   if (result.cache) {
     const cacheParts = [];
+    if (result.cache.effective !== undefined) {
+      cacheParts.push(`cache effective: ${result.cache.effective}`);
+    }
     if (result.cache.creationInputTokens !== undefined) {
       cacheParts.push(`cache creation tokens: ${result.cache.creationInputTokens}`);
     }
@@ -56,6 +68,13 @@ function formatActivity(result: CcReviewOutput): string | undefined {
 
   if (result.costUsd !== undefined) {
     lines.push(`cost: $${result.costUsd}`);
+  }
+
+  if (result.diagnostics?.length) {
+    lines.push("## Diagnostics");
+    for (const diagnostic of result.diagnostics) {
+      lines.push(`- ${diagnostic}`);
+    }
   }
 
   return lines.join("\n");

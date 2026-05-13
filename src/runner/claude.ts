@@ -1,6 +1,11 @@
 import { execa } from "execa";
+import { createInterface } from "node:readline";
+import type { Readable } from "node:stream";
 
 import { buildReviewPacket } from "../review/packet.js";
+import { createClaudeStreamParser } from "../review/activity.js";
+import type { CcReviewActivityEvent } from "../review/activity.js";
+import { analyzeCacheUsage, parseCacheUsage } from "../review/cache.js";
 import type { CcReviewInput, CcReviewOutput } from "../review/schema.js";
 
 const DEFAULT_TIMEOUT_MS = 15 * 60 * 1000;
@@ -12,6 +17,7 @@ export interface ClaudeExecuteOptions {
   env?: Record<string, string>;
   reject: false;
   timeout: number;
+  signal?: AbortSignal;
 }
 
 export interface ClaudeExecuteResult {
@@ -26,11 +32,22 @@ export type ClaudeExecutor = (
   options: ClaudeExecuteOptions
 ) => Promise<ClaudeExecuteResult>;
 
+export type StreamingClaudeExecutor = (
+  command: string,
+  args: string[],
+  options: ClaudeExecuteOptions,
+  onStdoutLine: (line: string) => void,
+  onStderrLine: (line: string) => void
+) => Promise<ClaudeExecuteResult>;
+
 export interface RunClaudeReviewDeps {
   execute?: ClaudeExecutor;
+  executeStreaming?: StreamingClaudeExecutor;
+  onActivity?: (event: CcReviewActivityEvent) => void;
   now?: () => number;
   buildPacket?: (input: CcReviewInput) => Promise<string>;
   timeoutMs?: number;
+  signal?: AbortSignal;
 }
 
 export async function runClaudeReview(
@@ -41,19 +58,50 @@ export async function runClaudeReview(
   const execute = deps.execute ?? defaultExecute;
   const makePacket = deps.buildPacket ?? buildReviewPacket;
   const started = now();
-  const packet = await makePacket(input);
   const args = buildClaudeArgs(input);
 
-  const child = await execute("claude", args, {
+  if (deps.signal?.aborted) {
+    return buildCancelledReview(input, args, Math.max(0, now() - started));
+  }
+
+  const packet = await makePacket(input);
+
+  if (deps.signal?.aborted) {
+    return buildCancelledReview(input, args, Math.max(0, now() - started));
+  }
+
+  const options = {
     cwd: input.cwd ?? process.cwd(),
     input: packet,
     env: buildClaudeEnv(input),
     reject: false,
-    timeout: deps.timeoutMs ?? DEFAULT_TIMEOUT_MS
-  });
+    timeout: deps.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+    signal: deps.signal
+  } satisfies ClaudeExecuteOptions;
+
+  let child: ClaudeExecuteResult;
+  let parsed: ParsedClaudeOutput;
+
+  if (input.stream && (deps.executeStreaming || !deps.execute)) {
+    const streamed = await runStreamingClaude(
+          deps.executeStreaming ?? defaultExecuteStreaming,
+          args,
+          options,
+          deps.onActivity
+        );
+    child = streamed.child;
+    parsed = streamed.parsed;
+  } else {
+    child = await execute("claude", args, options);
+    parsed = parseClaudeOutput(child.stdout, input.stream, deps.onActivity);
+  }
 
   const elapsedMs = Math.max(0, now() - started);
-  const parsed = parseClaudeOutput(child.stdout, input.stream);
+  const cacheAnalysis = analyzeCacheUsage(input.cacheTtl, parsed.cache);
+  const diagnostics = [
+    ...(parsed.diagnostics ?? []),
+    ...cacheAnalysis.diagnostics
+  ];
 
   return {
     ok: child.exitCode === 0,
@@ -65,9 +113,11 @@ export async function runClaudeReview(
     command: ["claude", ...args.map(redactLongArg)],
     eventsTail: parsed.eventsTail,
     transcriptTail: parsed.transcriptTail,
+    activityTail: parsed.activityTail,
     eventCount: parsed.eventCount,
-    cache: parsed.cache,
+    cache: cacheAnalysis.cache,
     costUsd: parsed.costUsd,
+    diagnostics: diagnostics.length ? diagnostics : undefined,
     stderrTail: child.stderr ? child.stderr.slice(-4_000) : undefined,
     exitCode: child.exitCode ?? undefined
   };
@@ -136,17 +186,23 @@ interface ParsedClaudeOutput {
   structured?: unknown;
   eventsTail?: string[];
   transcriptTail?: string[];
+  activityTail?: CcReviewActivityEvent[];
   eventCount?: number;
   cache?: {
     creationInputTokens?: number;
     readInputTokens?: number;
   };
   costUsd?: number;
+  diagnostics?: string[];
 }
 
-function parseClaudeOutput(stdout: string, stream: boolean): ParsedClaudeOutput {
+function parseClaudeOutput(
+  stdout: string,
+  stream: boolean,
+  onActivity?: (event: CcReviewActivityEvent) => void
+): ParsedClaudeOutput {
   if (stream) {
-    return parseClaudeStreamOutput(stdout);
+    return parseClaudeStreamOutput(stdout, onActivity);
   }
 
   try {
@@ -178,193 +234,18 @@ function parseClaudeOutput(stdout: string, stream: boolean): ParsedClaudeOutput 
   }
 }
 
-function parseClaudeStreamOutput(stdout: string): ParsedClaudeOutput {
-  const events: string[] = [];
-  let review = "";
-  let structured: unknown;
-  let cache: ParsedClaudeOutput["cache"];
-  let costUsd: number | undefined;
-  let eventCount = 0;
-  const textDeltas: string[] = [];
-  const transcript: string[] = [];
-
+function parseClaudeStreamOutput(
+  stdout: string,
+  onActivity?: (event: CcReviewActivityEvent) => void
+): ParsedClaudeOutput {
+  const parser = createClaudeStreamParser({ onActivity });
   for (const line of stdout.split(/\r?\n/)) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-
-    let event: Record<string, unknown>;
-    try {
-      event = JSON.parse(trimmed) as Record<string, unknown>;
-    } catch {
-      continue;
-    }
-
-    eventCount += 1;
-    const summary = summarizeStreamEvent(event);
-    if (summary) {
-      events.push(summary);
-    }
-
-    if (event.type === "stream_event") {
-      const deltaText = getTextDelta(event);
-      if (deltaText) {
-        textDeltas.push(deltaText);
-      }
-      const summary = summarizeStreamTextDelta(event);
-      if (summary) {
-        events.push("text_delta");
-      }
-    }
-
-    const assistantText = getAssistantText(event);
-    if (assistantText) {
-      flushTextDeltas(textDeltas, transcript);
-      transcript.push(assistantText);
-    }
-
-    if (event.type === "result") {
-      if (typeof event.result === "string") {
-        review = event.result;
-      }
-      if ("structured_output" in event) {
-        structured = event.structured_output;
-      }
-      cache = parseCacheUsage(event.usage);
-      costUsd = typeof event.total_cost_usd === "number" ? event.total_cost_usd : undefined;
-    }
+    parser.pushLine(line);
   }
-
+  const parsed = parser.finish();
   return {
-    review: review || textDeltas.join("") || stdout,
-    structured,
-    eventsTail: events.slice(-50),
-    transcriptTail: [...transcript, flushTextDeltas(textDeltas)].filter((item): item is string =>
-      Boolean(item)
-    ).slice(-20),
-    eventCount,
-    cache,
-    costUsd
-  };
-}
-
-function flushTextDeltas(buffer: string[], target?: string[]): string | undefined {
-  if (!buffer.length) {
-    return undefined;
-  }
-
-  const text = buffer.join("").trim();
-  buffer.length = 0;
-  if (text && target) {
-    target.push(text);
-  }
-
-  return text || undefined;
-}
-
-function summarizeStreamEvent(event: Record<string, unknown>): string | undefined {
-  if (event.type === "system") {
-    return `system:${String(event.subtype ?? "event")}`;
-  }
-
-  if (event.type === "result") {
-    return "result";
-  }
-
-  if (event.type === "assistant") {
-    return summarizeAssistantMessage(event);
-  }
-
-  if (event.type === "stream_event") {
-    const streamEvent = event.event as Record<string, unknown> | undefined;
-    if (streamEvent?.type === "content_block_start") {
-      const block = streamEvent.content_block as Record<string, unknown> | undefined;
-      if (block?.type === "tool_use") {
-        return `tool_start: ${String(block.name ?? "unknown")}`;
-      }
-    }
-    if (streamEvent?.type === "message_delta") {
-      return "message_delta";
-    }
-    return undefined;
-  }
-
-  return typeof event.type === "string" ? event.type : undefined;
-}
-
-function summarizeStreamTextDelta(event: Record<string, unknown>): string | undefined {
-  return getTextDelta(event) ? "text_delta" : undefined;
-}
-
-function getAssistantText(event: Record<string, unknown>): string | undefined {
-  if (event.type !== "assistant") {
-    return undefined;
-  }
-
-  const message = event.message as Record<string, unknown> | undefined;
-  const content = message?.content;
-  if (!Array.isArray(content)) {
-    return undefined;
-  }
-
-  const text = content
-    .map((item) => {
-      const block = item as Record<string, unknown>;
-      return block.type === "text" && typeof block.text === "string" ? block.text : "";
-    })
-    .filter(Boolean)
-    .join("\n")
-    .trim();
-
-  return text || undefined;
-}
-
-function summarizeAssistantMessage(event: Record<string, unknown>): string | undefined {
-  const message = event.message as Record<string, unknown> | undefined;
-  const content = message?.content;
-  if (!Array.isArray(content)) {
-    return "assistant";
-  }
-
-  for (const item of content) {
-    const block = item as Record<string, unknown>;
-    if (block.type === "tool_use") {
-      return `tool_use: ${String(block.name ?? "unknown")} ${JSON.stringify(block.input ?? {})}`;
-    }
-  }
-
-  return "assistant";
-}
-
-function getTextDelta(event: Record<string, unknown>): string | undefined {
-  const streamEvent = event.event as Record<string, unknown> | undefined;
-  const delta = streamEvent?.delta as Record<string, unknown> | undefined;
-  if (streamEvent?.type === "content_block_delta" && delta?.type === "text_delta") {
-    return typeof delta.text === "string" ? delta.text : undefined;
-  }
-
-  return undefined;
-}
-
-function parseCacheUsage(usage: unknown): ParsedClaudeOutput["cache"] {
-  if (!usage || typeof usage !== "object") {
-    return undefined;
-  }
-
-  const record = usage as Record<string, unknown>;
-  const creationInputTokens =
-    typeof record.cache_creation_input_tokens === "number"
-      ? record.cache_creation_input_tokens
-      : undefined;
-  const readInputTokens =
-    typeof record.cache_read_input_tokens === "number" ? record.cache_read_input_tokens : undefined;
-
-  if (creationInputTokens === undefined && readInputTokens === undefined) {
-    return undefined;
-  }
-
-  return {
-    creationInputTokens,
-    readInputTokens
+    ...parsed,
+    review: parsed.review || stdout
   };
 }
 
@@ -382,12 +263,128 @@ async function defaultExecute(
   };
 }
 
+function buildCancelledReview(
+  input: CcReviewInput,
+  args: string[],
+  elapsedMs: number
+): CcReviewOutput {
+  return {
+    ok: false,
+    task: input.task,
+    model: input.model,
+    elapsedMs,
+    review: "Claude Code review cancelled before the subprocess started.",
+    command: ["claude", ...args.map(redactLongArg)],
+    diagnostics: ["Review request was already aborted before Claude Code started."]
+  };
+}
+
+async function runStreamingClaude(
+  executeStreaming: StreamingClaudeExecutor,
+  args: string[],
+  options: ClaudeExecuteOptions,
+  onActivity?: (event: CcReviewActivityEvent) => void
+): Promise<{ child: ClaudeExecuteResult; parsed: ParsedClaudeOutput }> {
+  const parser = createClaudeStreamParser({ onActivity });
+
+  const result = await executeStreaming(
+    "claude",
+    args,
+    options,
+    (line) => parser.pushLine(line),
+    () => undefined
+  );
+
+  const parsed = parser.finish();
+  return { child: result, parsed };
+}
+
+async function defaultExecuteStreaming(
+  command: string,
+  args: string[],
+  options: ClaudeExecuteOptions,
+  onStdoutLine: (line: string) => void,
+  onStderrLine: (line: string) => void
+): Promise<ClaudeExecuteResult> {
+  const stdoutLines: string[] = [];
+  const stderrLines: string[] = [];
+  let result: Awaited<ReturnType<typeof execa>> | undefined;
+  let caughtError: unknown;
+
+  const subprocess = execa(command, args, options);
+  const stdoutTask = collectLines(subprocess.stdout, stdoutLines, onStdoutLine);
+  const stderrTask = collectLines(subprocess.stderr, stderrLines, onStderrLine);
+
+  try {
+    result = await subprocess;
+  } catch (error) {
+    caughtError = error;
+  } finally {
+    await Promise.allSettled([stdoutTask, stderrTask]);
+  }
+
+  if (result) {
+    return {
+      stdout: stdoutLines.join("\n") || outputToString(result.stdout),
+      stderr: stderrLines.join("\n") || outputToString(result.stderr),
+      exitCode: result.exitCode ?? null
+    };
+  }
+
+  const maybeResult = caughtError as {
+    stdout?: string;
+    stderr?: string;
+    exitCode?: number;
+  };
+  return {
+    stdout: stdoutLines.join("\n") || maybeResult.stdout || "",
+    stderr: stderrLines.join("\n") || maybeResult.stderr || String(caughtError),
+    exitCode: maybeResult.exitCode ?? null
+  };
+}
+
+async function collectLines(
+  stream: Readable | null,
+  target: string[],
+  onLine: (line: string) => void
+): Promise<void> {
+  if (!stream) {
+    return;
+  }
+
+  const lines = createInterface({
+    input: stream,
+    crlfDelay: Infinity
+  });
+
+  for await (const line of lines) {
+    target.push(line);
+    onLine(line);
+  }
+}
+
 function redactLongArg(value: string): string {
   if (value.length <= 200) {
     return value;
   }
 
   return `${value.slice(0, 200)}[TRUNCATED]`;
+}
+
+function outputToString(value: unknown): string {
+  if (typeof value === "string") {
+    return value;
+  }
+
+  if (value === undefined || value === null) {
+    return "";
+  }
+
+  if (value instanceof Uint8Array) {
+    return new TextDecoder().decode(value);
+  }
+
+  return String(value);
 }
 
 const REVIEW_JSON_SCHEMA = {

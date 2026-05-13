@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.2
+
+- Add structured Claude Code activity timeline output.
+- Add MCP progress notifications when the client provides a `progressToken`.
+- Add cache effective diagnostics for hit, cold write, disabled, and unreported states.
+- Stream Claude Code stdout through an incremental parser while preserving buffered fallback tests.
+- Wire MCP cancellation signals into Claude Code execution.
+- Document progress-token and cache-reporting limitations.
+
 ## 0.1.1
 
 - Preserve review packet text by default; redaction is opt-in.

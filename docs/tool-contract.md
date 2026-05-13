@@ -37,10 +37,21 @@ Output:
 - `command`
 - `eventsTail`
 - `transcriptTail`
+- `activityTail`
 - `eventCount`
 - `cache`
 - `costUsd`
+- `diagnostics`
 - `stderrTail`
 - `exitCode`
 
-MCP tool calls still return once after Claude Code exits. Streaming is captured and summarized in the final result; real-time MCP progress notifications are not implemented yet.
+While the tool is running, the server sends MCP `notifications/progress` when the client includes `_meta.progressToken` in the tool call request. Progress values are monotonically increasing event counters and `message` contains a concise Claude Code activity summary. If the client does not provide a progress token, no real-time notification can be sent; the final result includes `diagnostics` explaining that limitation.
+
+`cache.effective` is derived from Claude Code's reported usage fields:
+
+- `hit`: `cache_read_input_tokens` was greater than zero.
+- `write`: cache creation tokens were reported without read tokens.
+- `miss_or_unreported`: Claude Code did not report cache usage or reported zero cache tokens.
+- `disabled`: the request used `cacheTtl = "5m"` and did not request the 1-hour cache hint.
+
+These diagnostics reflect Claude Code CLI output, not direct Anthropic API state.

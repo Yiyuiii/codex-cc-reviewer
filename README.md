@@ -14,7 +14,7 @@ Use Claude Code as an external reviewer from Codex.
 - Review diffs before final answers or commits.
 - Ask for adversarial review on risky changes.
 - Keep Codex in control instead of creating a broad multi-agent bridge.
-- See what Claude Code did: tool activity, transcript snippets, cache stats, and cost.
+- See what Claude Code did: tool activity, timeline events, transcript snippets, cache diagnostics, and cost.
 
 ## Install
 
@@ -80,11 +80,13 @@ The final MCP result includes:
 
 - Claude's review text
 - recent Claude Code tool/activity events
+- a structured activity timeline
 - recent transcript snippets from stream output
-- prompt cache creation/read token counts, when reported
+- prompt cache creation/read token counts and effective cache status, when reported
+- diagnostics, including missing MCP progress support or cache reporting gaps
 - cost, when reported
 
-MCP still returns once after Claude Code exits. Real-time MCP progress notifications are a future feature.
+While Claude Code runs, the MCP server also sends `notifications/progress` when the Codex MCP client provides a `progressToken`. If the client does not provide one, the final detail still includes the captured timeline and a diagnostic explains why real-time progress was unavailable.
 
 ## Safety
 

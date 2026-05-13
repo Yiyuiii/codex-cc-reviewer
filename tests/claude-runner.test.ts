@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { runClaudeReview, type ClaudeExecutor } from "../src/runner/claude.js";
+import {
+  runClaudeReview,
+  type ClaudeExecutor,
+  type StreamingClaudeExecutor
+} from "../src/runner/claude.js";
 import type { CcReviewInput } from "../src/review/schema.js";
 
 const baseInput: CcReviewInput = {
@@ -92,7 +96,8 @@ describe("runClaudeReview", () => {
     expect(result.eventCount).toBe(5);
     expect(result.cache).toEqual({
       creationInputTokens: 1000,
-      readInputTokens: 2000
+      readInputTokens: 2000,
+      effective: "hit"
     });
     expect(result.costUsd).toBe(0.12);
     expect(observed?.[0]).toBe("claude");
@@ -176,6 +181,67 @@ describe("runClaudeReview", () => {
     expect(result.structured).toEqual({ verdict: "needs_changes", findings: [] });
   });
 
+  it("uses the streaming executor and reports activity as stdout lines arrive", async () => {
+    const activity: string[] = [];
+    let observedSignal: AbortSignal | undefined;
+    const controller = new AbortController();
+    const lines = [
+      JSON.stringify({ type: "system", subtype: "init" }),
+      JSON.stringify({
+        type: "assistant",
+        message: {
+          content: [{ type: "text", text: "Streaming progress." }]
+        }
+      }),
+      JSON.stringify({
+        type: "result",
+        result: "Final streaming review.",
+        usage: {
+          cache_creation_input_tokens: 0,
+          cache_read_input_tokens: 12
+        }
+      })
+    ];
+    const executeStreaming: StreamingClaudeExecutor = async (
+      _command,
+      _args,
+      options,
+      onStdoutLine
+    ) => {
+      observedSignal = options.signal;
+      for (const line of lines) {
+        onStdoutLine(line);
+      }
+      return {
+        stdout: lines.join("\n"),
+        stderr: "",
+        exitCode: 0
+      };
+    };
+
+    const result = await runClaudeReview(baseInput, {
+      executeStreaming,
+      signal: controller.signal,
+      onActivity: (event) => activity.push(`${event.kind}:${event.summary}`),
+      now: fakeClock([1, 2]),
+      buildPacket: async () => "PACKET"
+    });
+
+    expect(observedSignal).toBe(controller.signal);
+    expect(activity).toEqual([
+      "system:system:init",
+      "assistant_text:Streaming progress.",
+      "result:result"
+    ]);
+    expect(result.review).toBe("Final streaming review.");
+    expect(result.activityTail?.map((event) => event.kind)).toEqual([
+      "system",
+      "assistant_text",
+      "result"
+    ]);
+    expect(result.cache?.effective).toBe("hit");
+  });
+
   it("returns stderr tail and exit code when Claude fails", async () => {
     const execute: ClaudeExecutor = async () => ({
       stdout: "partial stdout",
@@ -194,6 +260,26 @@ describe("runClaudeReview", () => {
     expect(result.exitCode).toBe(2);
     expect(result.stderrTail).toHaveLength(4_000);
     expect(result.stderrTail?.endsWith("tail")).toBe(true);
+  });
+
+  it("does not build the packet when the request is already aborted", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    let builtPacket = false;
+
+    const result = await runClaudeReview(baseInput, {
+      signal: controller.signal,
+      buildPacket: async () => {
+        builtPacket = true;
+        return "PACKET";
+      },
+      now: fakeClock([10, 20])
+    });
+
+    expect(builtPacket).toBe(false);
+    expect(result.ok).toBe(false);
+    expect(result.review).toContain("cancelled");
+    expect(result.diagnostics?.join("\n")).toContain("aborted");
   });
 });
 

@@ -22,6 +22,30 @@ export const ClaudePermissionModeSchema = z.enum([
 
 export const CacheTtlSchema = z.enum(["5m", "1h"]);
 
+const ActivityEventSchema = z.object({
+  index: z.number().int().positive(),
+  kind: z.enum([
+    "system",
+    "assistant_text",
+    "user_text",
+    "text_delta",
+    "tool_use",
+    "tool_result",
+    "hook",
+    "message_delta",
+    "result",
+    "stderr",
+    "unknown"
+  ]),
+  rawType: z.string(),
+  summary: z.string(),
+  text: z.string().optional(),
+  toolName: z.string().optional(),
+  toolInput: z.unknown().optional(),
+  toolInputPreview: z.string().optional(),
+  toolInputTruncated: z.boolean().optional()
+});
+
 const ToolsSchema = z.preprocess((value) => {
   if (typeof value !== "string") return value;
 
@@ -68,10 +92,13 @@ export const CcReviewOutputSchema = z.object({
   cache: z
     .object({
       creationInputTokens: z.number().int().nonnegative().optional(),
-      readInputTokens: z.number().int().nonnegative().optional()
+      readInputTokens: z.number().int().nonnegative().optional(),
+      effective: z.enum(["hit", "write", "miss_or_unreported", "disabled"]).optional()
     })
     .optional(),
   costUsd: z.number().nonnegative().optional(),
+  activityTail: z.array(ActivityEventSchema).optional(),
+  diagnostics: z.array(z.string()).optional(),
   stderrTail: z.string().optional(),
   exitCode: z.number().int().optional()
 });

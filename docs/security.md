@@ -10,6 +10,7 @@ Default posture:
 - Claude permission mode: `bypassPermissions`
 - Claude tools: `default`
 - stream-json activity capture enabled
+- MCP progress notifications enabled when the client provides `progressToken`
 - 1-hour prompt cache TTL hint enabled
 - no git status or diff unless requested
 - review packet content is sent as provided by default
