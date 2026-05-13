@@ -2,6 +2,14 @@
 
 Use `cc_review` when you want a second opinion from Claude Code.
 
+Recommended mental model:
+
+- Codex owns the task state, implementation, verification, and final decision.
+- Claude Code provides bounded, high-effort Opus review at useful checkpoints.
+- Claude's output is evidence to synthesize, not an instruction to obey blindly.
+
+This workflow is Opus-oriented. The default `model: "opus"` assumes that the useful signal comes from spending Claude Code / Opus quota on bounded review, while Codex preserves execution state and makes the final decision.
+
 Good review points:
 
 - before implementing a non-trivial plan
@@ -50,3 +58,16 @@ Synthesize the evidence and produce the next plan or recommendation.
 </ccr:synthesis_request>
 </synthesis_packet>
 ```
+
+## Codex Global Prompt
+
+If you want Codex to call `cc_review` automatically during complex work, add a global instruction like this after `codex-cc-reviewer` is installed and you understand the safety posture in [security.md](security.md):
+
+```text
+For complex changes, always use the Codex + cc_review (Claude's review) convergence workflow:
+state summary -> plan -> cc_review -> synthesize -> revise until no accepted material improvements remain -> implement -> verify -> cc_review diff -> synthesize patch plan -> repeat until converged.
+
+Claude's review is advisory, not authoritative. Codex must decide and explain Claude's accepted/rejected/deferred findings.
+```
+
+This workflow is useful when the change is complex enough to benefit from an independent challenge. For small edits, it may be unnecessary overhead.
