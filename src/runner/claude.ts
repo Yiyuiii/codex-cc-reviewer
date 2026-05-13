@@ -132,7 +132,7 @@ async function defaultExecute(
   return {
     stdout: result.stdout,
     stderr: result.stderr,
-    exitCode: result.exitCode
+    exitCode: result.exitCode ?? null
   };
 }
 

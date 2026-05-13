@@ -20,7 +20,7 @@ export async function runCommandCheck(
     return {
       ok: result.exitCode === 0,
       command: [command, ...args].join(" "),
-      output: output || `exit ${result.exitCode}`
+      output: output || (result.failed ? "failed to run command" : `exit ${result.exitCode ?? "unknown"}`)
     };
   } catch (error) {
     return {
@@ -30,4 +30,3 @@ export async function runCommandCheck(
     };
   }
 }
-

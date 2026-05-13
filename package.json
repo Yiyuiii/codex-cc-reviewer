@@ -10,8 +10,17 @@
     "dist",
     "prompts",
     "examples",
+    "docs/installation.md",
+    "docs/manual-setup.md",
+    "docs/codex-usage.md",
+    "docs/security.md",
+    "docs/tool-contract.md",
+    "docs/troubleshooting.md",
+    "docs/prior-art.md",
     "README.md",
     "README.zh-CN.md",
+    "SECURITY.md",
+    "CHANGELOG.md",
     "LICENSE"
   ],
   "scripts": {
@@ -39,4 +48,3 @@
   },
   "license": "MIT"
 }
-
