@@ -2,7 +2,10 @@
 
 import { Command } from "commander";
 
+import { runDoctor } from "./cli/doctor.js";
+import { installCodexConfig } from "./cli/install.js";
 import { runLocalReview } from "./cli/review.js";
+import { uninstallCodexConfig } from "./cli/uninstall.js";
 import { serveMcp } from "./mcp/server.js";
 
 const program = new Command();
@@ -17,6 +20,27 @@ program
   .description("Start MCP stdio server")
   .action(async () => {
     await serveMcp();
+  });
+
+program
+  .command("doctor")
+  .description("Check Node, Codex, Claude Code, and MCP setup")
+  .action(async () => {
+    await runDoctor();
+  });
+
+program
+  .command("install")
+  .description("Install MCP config into Codex")
+  .action(async () => {
+    await installCodexConfig();
+  });
+
+program
+  .command("uninstall")
+  .description("Remove MCP config from Codex")
+  .action(async () => {
+    await uninstallCodexConfig();
   });
 
 program
