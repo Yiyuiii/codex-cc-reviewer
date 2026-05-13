@@ -254,7 +254,7 @@ async function defaultExecute(
   args: string[],
   options: ClaudeExecuteOptions
 ): Promise<ClaudeExecuteResult> {
-  const result = await execa(command, args, options);
+  const result = await execa(command, args, buildExecaOptions(options));
 
   return {
     stdout: result.stdout,
@@ -311,7 +311,7 @@ async function defaultExecuteStreaming(
   let result: Awaited<ReturnType<typeof execa>> | undefined;
   let caughtError: unknown;
 
-  const subprocess = execa(command, args, options);
+  const subprocess = execa(command, args, buildExecaOptions(options));
   const stdoutTask = collectLines(subprocess.stdout, stdoutLines, onStdoutLine);
   const stderrTask = collectLines(subprocess.stderr, stderrLines, onStderrLine);
 
@@ -369,6 +369,17 @@ function redactLongArg(value: string): string {
   }
 
   return `${value.slice(0, 200)}[TRUNCATED]`;
+}
+
+export function buildExecaOptions(
+  options: ClaudeExecuteOptions
+): Omit<ClaudeExecuteOptions, "signal"> & { cancelSignal?: AbortSignal } {
+  const { signal, ...rest } = options;
+
+  return {
+    ...rest,
+    ...(signal ? { cancelSignal: signal } : {})
+  };
 }
 
 function outputToString(value: unknown): string {

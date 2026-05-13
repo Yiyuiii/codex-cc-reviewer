@@ -6,7 +6,7 @@ import { registerCcReviewTool } from "./tools.js";
 export async function serveMcp(): Promise<void> {
   const server = new McpServer({
     name: "codex-cc-reviewer",
-    version: "0.1.2"
+    version: "0.1.3"
   });
 
   registerCcReviewTool(server);

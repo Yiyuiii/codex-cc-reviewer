@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildExecaOptions,
   runClaudeReview,
   type ClaudeExecutor,
   type StreamingClaudeExecutor
@@ -28,6 +29,22 @@ const baseInput: CcReviewInput = {
 };
 
 describe("runClaudeReview", () => {
+  it("maps internal AbortSignal to execa cancelSignal without leaking signal", () => {
+    const controller = new AbortController();
+
+    const options = buildExecaOptions({
+      cwd: process.cwd(),
+      input: "PACKET",
+      env: { ENABLE_PROMPT_CACHING_1H: "1" },
+      reject: false,
+      timeout: 1000,
+      signal: controller.signal
+    });
+
+    expect(options).not.toHaveProperty("signal");
+    expect(options).toHaveProperty("cancelSignal", controller.signal);
+  });
+
   it("runs Claude with deep autonomous streaming defaults and sends the packet through stdin", async () => {
     let observed: Parameters<ClaudeExecutor> | undefined;
     const execute: ClaudeExecutor = async (...args) => {

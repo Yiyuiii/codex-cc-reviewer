@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.3
+
+- Fix real Claude Code execution with execa v9 by mapping internal cancellation signals to `cancelSignal`.
+- Add a regression test for the execa option mapping.
+
 ## 0.1.2
 
 - Add structured Claude Code activity timeline output.
