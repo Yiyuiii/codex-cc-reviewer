@@ -13,8 +13,7 @@ describe("runLocalReview", () => {
         task: "review_diff",
         context: "Review my staged change.",
         tools: "Read, Bash(git diff *)",
-        includeGitDiff: true,
-        maxTurns: "4"
+        includeGitDiff: true
       },
       {
         runReview: async (input) => {
@@ -29,29 +28,30 @@ describe("runLocalReview", () => {
     expect(observed?.task).toBe("review_diff");
     expect(observed?.tools).toEqual(["Read", "Bash(git diff *)"]);
     expect(observed?.includeGitDiff).toBe(true);
-    expect(observed?.maxTurns).toBe(4);
     expect(writes.join("")).toContain("Looks reasonable.");
   });
 
-  it("leaves maxTurns unset when the CLI option is omitted", async () => {
-    let observed: CcReviewInput | undefined;
+  it("rejects removed cap options before running a review", async () => {
+    let reachedRunner = false;
 
-    const result = await runLocalReview(
-      {
-        task: "review_doc",
-        context: "Review this doc."
-      },
-      {
-        runReview: async (input) => {
-          observed = input;
-          return reviewOutput(input, "OK.");
-        },
-        write: () => undefined
-      }
-    );
+    await expect(
+      runLocalReview(
+        {
+          task: "review_doc",
+          context: "Review this doc.",
+          maxTurns: "4"
+        } as unknown as Parameters<typeof runLocalReview>[0],
+        {
+          runReview: async (input) => {
+            reachedRunner = true;
+            return reviewOutput(input, "OK.");
+          },
+          write: () => undefined
+        }
+      )
+    ).rejects.toThrow(/unrecognized/i);
 
-    expect(result.ok).toBe(true);
-    expect(observed?.maxTurns).toBeUndefined();
+    expect(reachedRunner).toBe(false);
   });
 });
 

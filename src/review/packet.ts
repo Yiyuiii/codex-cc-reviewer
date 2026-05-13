@@ -1,9 +1,11 @@
 import { getGitDiff as defaultGetGitDiff } from "../git/diff.js";
+import { getGitSummary as defaultGetGitSummary } from "../git/summary.js";
 import { getGitStatus as defaultGetGitStatus } from "../git/status.js";
 import { REVIEWER_PROMPT } from "./prompts.js";
 import type { CcReviewInput } from "./schema.js";
 
 export interface ReviewPacketDeps {
+  getGitSummary?: (cwd?: string) => Promise<string>;
   getGitStatus?: (cwd?: string) => Promise<string>;
   getGitDiff?: (cwd?: string) => Promise<string>;
 }
@@ -12,19 +14,28 @@ export async function buildReviewPacket(
   input: CcReviewInput,
   deps: ReviewPacketDeps = {}
 ): Promise<string> {
+  const getGitSummary = deps.getGitSummary ?? defaultGetGitSummary;
   const getGitStatus = deps.getGitStatus ?? defaultGetGitStatus;
   const getGitDiff = deps.getGitDiff ?? defaultGetGitDiff;
   const cwd = input.cwd ?? process.cwd();
-  const autoDiscoverGit = shouldAutoDiscoverGit(input);
-  const includeGitStatus = input.includeGitStatus || autoDiscoverGit;
-  const includeGitDiff = input.includeGitDiff || autoDiscoverGit;
+  const autoDiscoverRawGit = shouldAutoDiscoverRawGit(input);
+  const includeGitSummary = shouldIncludeGitSummary(input);
+  const includeGitStatus = input.includeGitStatus || autoDiscoverRawGit;
+  const includeGitDiff = input.includeGitDiff || autoDiscoverRawGit;
 
-  const [rawGitStatus, rawGitDiff] = await Promise.all([
+  const [rawGitSummary, rawGitStatus, rawGitDiff] = await Promise.all([
+    includeGitSummary ? getGitSummary(cwd) : Promise.resolve(undefined),
     includeGitStatus ? getGitStatus(cwd) : Promise.resolve(undefined),
     includeGitDiff ? getGitDiff(cwd) : Promise.resolve(undefined)
   ]);
-  const diagnostics = buildPacketDiagnostics(input, rawGitStatus, rawGitDiff, autoDiscoverGit);
-  const budgeted = prepareVariableBlocks(input, rawGitStatus, rawGitDiff, diagnostics);
+  const diagnostics = buildPacketDiagnostics(
+    input,
+    rawGitSummary,
+    rawGitStatus,
+    rawGitDiff,
+    autoDiscoverRawGit
+  );
+  const budgeted = prepareVariableBlocks(input, rawGitSummary, rawGitStatus, rawGitDiff, diagnostics);
   const instructions = [
     REVIEWER_PROMPT,
     "Act as an external reviewer.",
@@ -62,6 +73,10 @@ export async function buildReviewPacket(
     ].join("\n")
   ];
 
+  if (budgeted.gitSummary?.trim()) {
+    sections.push("## Git Evidence Summary", fenced(budgeted.gitSummary, "text"));
+  }
+
   if (budgeted.gitStatus?.trim()) {
     sections.push("## Optional Git Status", fenced(budgeted.gitStatus, "text"));
   }
@@ -85,6 +100,7 @@ interface VariableBlocks {
   knownRisks: string;
   testsRun: string;
   context: string;
+  gitSummary?: string;
   gitStatus?: string;
   gitDiff?: string;
   diagnostics?: string;
@@ -92,6 +108,7 @@ interface VariableBlocks {
 
 function prepareVariableBlocks(
   input: CcReviewInput,
+  rawGitSummary: string | undefined,
   rawGitStatus: string | undefined,
   rawGitDiff: string | undefined,
   diagnostics: string[]
@@ -129,6 +146,7 @@ function prepareVariableBlocks(
       weight: input.testsRun?.length ? 0.06 : 0.02
     },
     { key: "context", value: input.context, weight: 0.45 },
+    { key: "gitSummary", value: rawGitSummary, weight: rawGitSummary !== undefined ? 0.08 : 0 },
     { key: "gitStatus", value: rawGitStatus, weight: rawGitStatus !== undefined ? 0.1 : 0 },
     { key: "gitDiff", value: rawGitDiff, weight: rawGitDiff !== undefined ? 0.3 : 0 },
     {
@@ -155,6 +173,7 @@ function prepareVariableBlocks(
     knownRisks: prepared.knownRisks ?? "Not provided.",
     testsRun: prepared.testsRun ?? "Not provided.",
     context: prepared.context ?? "",
+    gitSummary: prepared.gitSummary,
     gitStatus: prepared.gitStatus,
     gitDiff: prepared.gitDiff,
     diagnostics: diagnostics.length ? prepared.diagnostics : undefined
@@ -180,15 +199,22 @@ function limitChars(value: string, maxChars: number): string {
     return value;
   }
 
-  const omitted = value.length - maxChars;
-  return `${value.slice(0, maxChars)}\n\n[TRUNCATED ${omitted} chars]`;
+  const markerFor = (omitted: number) => `\n\n[TRUNCATED ${omitted} chars from middle]\n\n`;
+  const initialMarker = markerFor(value.length);
+  const availableChars = Math.max(0, maxChars - initialMarker.length);
+  const headChars = Math.ceil(availableChars * 0.6);
+  const tailChars = Math.max(0, availableChars - headChars);
+  const omitted = Math.max(0, value.length - headChars - tailChars);
+  const marker = markerFor(omitted);
+
+  return `${value.slice(0, headChars)}${marker}${tailChars ? value.slice(-tailChars) : ""}`;
 }
 
 function fenced(value: string, language: string): string {
   return `\`\`\`${language}\n${value}\n\`\`\``;
 }
 
-function shouldAutoDiscoverGit(input: CcReviewInput): boolean {
+function shouldAutoDiscoverRawGit(input: CcReviewInput): boolean {
   if (input.autoDiscoverGit !== undefined) {
     return input.autoDiscoverGit;
   }
@@ -196,8 +222,17 @@ function shouldAutoDiscoverGit(input: CcReviewInput): boolean {
   return input.task === "review_diff" || input.task === "adversarial_review";
 }
 
+function shouldIncludeGitSummary(input: CcReviewInput): boolean {
+  if (input.autoDiscoverGit === false) {
+    return input.includeGitStatus || input.includeGitDiff;
+  }
+
+  return true;
+}
+
 function buildPacketDiagnostics(
   input: CcReviewInput,
+  rawGitSummary: string | undefined,
   rawGitStatus: string | undefined,
   rawGitDiff: string | undefined,
   autoDiscoverGit: boolean
@@ -207,7 +242,7 @@ function buildPacketDiagnostics(
     return [];
   }
 
-  if (rawGitStatus?.trim() || rawGitDiff?.trim()) {
+  if (rawGitSummary?.trim() || rawGitStatus?.trim() || rawGitDiff?.trim()) {
     return [];
   }
 

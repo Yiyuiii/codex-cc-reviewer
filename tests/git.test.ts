@@ -6,6 +6,7 @@ import { execa } from "execa";
 import { describe, expect, it } from "vitest";
 
 import { getGitDiff } from "../src/git/diff.js";
+import { getGitSummary } from "../src/git/summary.js";
 import { getGitStatus } from "../src/git/status.js";
 
 async function initRepo(): Promise<string> {
@@ -64,6 +65,45 @@ describe("git helpers", () => {
       const status = await getGitStatus(cwd);
 
       expect(status).toContain("1 .M");
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("getGitSummary includes diff stat, name status, and untracked files", async () => {
+    const cwd = await initRepo();
+
+    try {
+      await writeFile(path.join(cwd, "tracked.txt"), "new\n");
+      await writeFile(path.join(cwd, "untracked.txt"), "new\n");
+
+      const summary = await getGitSummary(cwd);
+
+      expect(summary).toContain("Diff Stat");
+      expect(summary).toContain("tracked.txt");
+      expect(summary).toContain("Name Status");
+      expect(summary).toContain("M");
+      expect(summary).toContain("Untracked Files");
+      expect(summary).toContain("untracked.txt");
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("getGitSummary falls back before the first commit", async () => {
+    const cwd = await mkdtemp(path.join(tmpdir(), "codex-cc-reviewer-git-"));
+
+    try {
+      await execa("git", ["init"], { cwd });
+      await writeFile(path.join(cwd, "new.txt"), "staged\n");
+      await execa("git", ["add", "new.txt"], { cwd });
+
+      const summary = await getGitSummary(cwd);
+
+      expect(summary).toContain("Diff Stat");
+      expect(summary).toContain("new.txt");
+      expect(summary).toContain("Name Status");
+      expect(summary).toContain("A");
     } finally {
       await rm(cwd, { recursive: true, force: true });
     }

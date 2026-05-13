@@ -30,20 +30,21 @@ The package is a TypeScript ESM CLI. The CLI entrypoint dispatches to `serve`, `
 
 The MCP server uses `@modelcontextprotocol/sdk` over stdio. It registers `cc_review`, validates input with `zod`, calls the Claude runner, and returns both text content and structured content.
 
-The runner builds a Markdown review packet, optionally injects local git status and diff, redacts common secret patterns, enforces a packet size limit, and invokes Claude Code in print mode. The prompt is sent through stdin to avoid command-line length limits, especially on Windows. JSON output is parsed from Claude's `result` and `structured_output` fields when available.
+The runner builds a Markdown review packet, injects lightweight git summary evidence when git discovery is enabled, optionally injects raw local git status and diff, redacts common secret patterns only when requested, applies a large packet budget with middle truncation, and invokes Claude Code in print mode. The prompt is sent through stdin to avoid command-line length limits, especially on Windows. JSON output is parsed from Claude's `result` and `structured_output` fields when available.
 
 ## Safety
 
-Defaults are intentionally conservative:
+Defaults are intentionally powerful for a trusted local owner workflow:
 
-- `permissionMode`: `plan`
-- `tools`: `Read`
-- `maxTurns`: unset by default; opt in only for budget-limited runs
-- `maxBudgetUsd`: unset unless requested
+- `permissionMode`: `bypassPermissions`
+- `tools`: `default`
+- `model`: `opus`
+- `effort`: `max`
+- no public cost or turn caps
 - `includeGitDiff`: `false`
 - `includeGitStatus`: `false`
-- secret redaction enabled for review packets
-- `bypassPermissions` is rejected
+- secret redaction disabled by default for faithful packet transmission
+- timeout remains as service hang protection
 
 The MCP tool is marked read-only and non-destructive. Claude remains a reviewer subprocess. Codex remains responsible for deciding whether to accept the findings.
 
@@ -54,8 +55,8 @@ The MCP tool is marked read-only and non-destructive. Claude remains a reviewer 
 - `task`: `review_plan`, `review_diff`, `review_doc`, or `adversarial_review`
 - `context`: required review context
 - optional `prompt`
-- optional Claude settings: `model`, `effort`, `output`, `permissionMode`, `tools`, `maxTurns`, `maxBudgetUsd`, `cwd`
-- optional git injections: `includeGitDiff`, `includeGitStatus`
+- optional Claude settings: `model`, `effort`, `output`, `permissionMode`, `tools`, `cwd`
+- optional git controls: `includeGitDiff`, `includeGitStatus`, `autoDiscoverGit`
 
 It returns:
 

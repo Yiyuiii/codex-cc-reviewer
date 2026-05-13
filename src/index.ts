@@ -13,7 +13,7 @@ const program = new Command();
 program
   .name("codex-cc-reviewer")
   .description("Use Claude Code as an external reviewer from Codex.")
-  .version("0.1.5");
+  .version("0.1.6");
 
 program
   .command("serve")
@@ -64,8 +64,6 @@ program
   .option("--output <output>", "markdown | json")
   .option("--permission-mode <mode>", "acceptEdits | auto | bypassPermissions | default | dontAsk | plan")
   .option("--tools <tools>", "Comma-separated Claude Code tool allowlist")
-  .option("--max-turns <turns>", "Maximum Claude turns")
-  .option("--max-budget-usd <usd>", "Maximum Claude Code spend in USD")
   .option("--cwd <cwd>", "Working directory for Claude")
   .option("--include-git-diff", "Include git diff in the review packet")
   .option("--include-git-status", "Include git status in the review packet")
@@ -76,12 +74,13 @@ program
   .option("--no-verbose", "Disable Claude Code verbose mode when streaming")
   .option("--cache-ttl <ttl>", "Prompt cache TTL hint: 5m | 1h")
   .action(async (options) => {
-    options.knownRisks = options.knownRisk;
-    options.testsRun = options.testRun;
-    if (options.disableAutoDiscoverGit) {
-      options.autoDiscoverGit = false;
+    const { knownRisk, testRun, disableAutoDiscoverGit, ...reviewOptions } = options;
+    reviewOptions.knownRisks = knownRisk;
+    reviewOptions.testsRun = testRun;
+    if (disableAutoDiscoverGit) {
+      reviewOptions.autoDiscoverGit = false;
     }
-    await runLocalReview(options);
+    await runLocalReview(reviewOptions);
   });
 
 await program.parseAsync();

@@ -38,7 +38,7 @@ This project is intentionally Opus-oriented. The default `model: "opus"` is not 
 
 The motivating observation, as of May 2026, is specific and deliberately subjective: in the author's Claude Plan workflows, after the Opus 4.6-era Claude Code path was forced from the older roughly 200K-context working style into a 1M-context working style, Opus became much less reliable as a continuous autonomous coding agent. This failure mode was consistently reproducible in the author's long coding sessions: Opus may forget an earlier conclusion, infer code it has not read, or push toward completion before verifying the repository evidence. In the month that led to this tool, the practical symptom was more uninspected guesses and less reliable carry-over from earlier context.
 
-That does not make Opus useless. It changes where Opus is most valuable. `codex-cc-reviewer` spends Claude Code / Opus quota on bounded review work that does not need to be obeyed wholesale: challenge a plan, inspect a diff, point out missed risks, and provide review highlights. Codex keeps the task state, implements, verifies, and decides which Opus findings to accept, reject, or defer.
+That does not make Opus useless. It changes where Opus is most valuable. `codex-cc-reviewer` spends Claude Code / Opus quota on focused review work that does not need to be obeyed wholesale: challenge a plan, inspect a diff, point out missed risks, and provide review highlights. Codex keeps the task state, implements, verifies, and decides which Opus findings to accept, reject, or defer.
 
 ## Who this is for
 
@@ -148,12 +148,13 @@ These are example configurations, not built-in profile names:
 | --- | --- | --- |
 | Trusted local owner workflow | `permissionMode: "bypassPermissions"`, `tools: ["default"]`, `redactSecrets: false` | Full-fidelity local workflow for your own repo, VM, or dev container. |
 | Conservative review | `permissionMode: "plan"` or `"default"`, `tools: ["Read", "Grep", "Glob"]`, `redactSecrets: true` | Use for sensitive or shared repositories where review should stay mostly read-only. |
-| Budget-limited review | `maxBudgetUsd`, an optional `maxTurns` cap, optionally `cacheTtl: "5m"` | The server forwards budget and turn limits to Claude Code. Use for large diffs or repeated reviews. |
+| Large-context review | default settings, optionally higher `maxContextChars` | Review packets use a large context budget and preserve both the beginning and end of oversized blocks. |
 
 Review packets are sent as faithfully as possible by default. `redactSecrets: true` enables best-effort redaction, but it is not comprehensive and can remove useful evidence.
 
-`maxTurns` is intentionally unset by default. Claude Code review often spends turns on small exploratory actions such as reading files, so turn limits are only forwarded when you explicitly set `maxTurns`.
-To control review cost without limiting turns, prefer `maxBudgetUsd`.
+`cc_review` does not expose cost or turn caps. Timeout remains enabled as service hang protection, not as a model capability limit.
+
+Oversized packet blocks are truncated from the middle, keeping both the start and the end. This preserves framing and recent evidence while avoiding unbounded packet growth.
 
 See [docs/security.md](docs/security.md) for the full security note.
 
@@ -206,7 +207,7 @@ The MCP server exposes one tool: `cc_review`.
 }
 ```
 
-For `review_diff` and `adversarial_review`, git status and `git diff HEAD` evidence are collected automatically unless `autoDiscoverGit` is set to `false`. `prompt` remains accepted as a backward-compatible alias for `reviewFocus`.
+The tool automatically includes a lightweight Git Evidence Summary when git discovery is enabled: diff stat, name-status, and untracked file manifest. For `review_diff` and `adversarial_review`, it also collects raw git status and `git diff HEAD` evidence by default unless `autoDiscoverGit` is set to `false`. `prompt` remains accepted as a backward-compatible alias for `reviewFocus`.
 
 Local CLI test with an optional review focus:
 

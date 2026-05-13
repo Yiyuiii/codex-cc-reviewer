@@ -17,8 +17,6 @@ export interface LocalReviewOptions {
   output?: string;
   permissionMode?: string;
   tools?: string;
-  maxTurns?: string | number;
-  maxBudgetUsd?: string | number;
   cwd?: string;
   includeGitDiff?: boolean;
   includeGitStatus?: boolean;
@@ -39,11 +37,7 @@ export async function runLocalReview(
   options: LocalReviewOptions,
   deps: LocalReviewDeps = {}
 ): Promise<CcReviewOutput> {
-  const input = CcReviewInputSchema.parse({
-    ...options,
-    maxTurns: coerceOptionalNumber(options.maxTurns),
-    maxBudgetUsd: coerceOptionalNumber(options.maxBudgetUsd)
-  });
+  const input = CcReviewInputSchema.parse(options);
   const runReview = deps.runReview ?? runClaudeReview;
   const write = deps.write ?? ((text: string) => process.stdout.write(text));
   const result = await runReview(input);
@@ -55,16 +49,4 @@ export async function runLocalReview(
   }
 
   return result;
-}
-
-function coerceOptionalNumber(value: string | number | undefined): number | undefined {
-  if (value === undefined || value === "") {
-    return undefined;
-  }
-
-  if (typeof value === "number") {
-    return value;
-  }
-
-  return Number(value);
 }

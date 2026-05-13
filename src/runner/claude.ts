@@ -158,15 +158,7 @@ export function buildClaudeArgs(input: CcReviewInput): string[] {
     args.push("--include-hook-events");
   }
 
-  if (input.maxTurns !== undefined) {
-    args.push("--max-turns", String(input.maxTurns));
-  }
-
   args.push("--no-session-persistence");
-
-  if (input.maxBudgetUsd !== undefined) {
-    args.push("--max-budget-usd", String(input.maxBudgetUsd));
-  }
 
   if (input.output === "json") {
     args.push("--json-schema", JSON.stringify(REVIEW_JSON_SCHEMA));

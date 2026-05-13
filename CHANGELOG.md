@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.6
+
+- Remove public `maxTurns` and `maxBudgetUsd` review caps; `cc_review` no longer forwards Claude Code cost or turn limits.
+- Make `cc_review` input strict so removed or unknown fields fail loudly instead of being silently ignored.
+- Add lightweight Git Evidence Summary with diff stat, name-status, and untracked manifest.
+- Truncate oversized review packet blocks from the middle, preserving both the beginning and end.
+- Document timeout as service hang protection rather than a model capability limit.
+
 ## 0.1.5
 
 - Stop passing a default Claude Code `--max-turns` limit.

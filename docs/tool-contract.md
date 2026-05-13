@@ -20,18 +20,21 @@ Input:
 - `output`: `markdown` or `json`
 - `permissionMode`: `acceptEdits`, `auto`, `bypassPermissions`, `default`, `dontAsk`, or `plan`; default `bypassPermissions`
 - `tools`: string or array; default `["default"]`
-- `maxTurns`: optional. When omitted, no Claude Code turn limit is passed; set it only for budget-limited runs. To control cost without limiting turns, prefer `maxBudgetUsd`.
-- `maxBudgetUsd`: optional
 - `cwd`: optional working directory
 - `includeGitDiff`: default `false`
 - `includeGitStatus`: default `false`
-- `autoDiscoverGit`: optional. When omitted, `review_diff` and `adversarial_review` automatically include git status and diff evidence.
+- `autoDiscoverGit`: optional. When omitted, the packet includes lightweight git summary evidence. `review_diff` and `adversarial_review` also include raw git status and diff evidence.
 - `stream`: default `true`; uses Claude Code `stream-json`
 - `includePartialMessages`: default `true`
 - `includeHookEvents`: default `true`
 - `verbose`: default `true`
 - `cacheTtl`: `5m` or `1h`; default `1h`
 - `redactSecrets`: default `false`; set `true` for best-effort redaction
+- `maxContextChars`: optional integer, min `1000`, max `1000000`, default `120000`; controls the budget for variable review packet blocks
+
+Unknown input keys are rejected. Removed cost and turn cap fields such as `maxBudgetUsd` and `maxTurns` fail validation instead of being silently ignored.
+
+The runner keeps a 15-minute timeout to prevent hung service calls. This timeout is operational protection, not a Claude Code capability cap.
 
 Output:
 
@@ -63,4 +66,6 @@ While the tool is running, the server sends MCP `notifications/progress` when th
 
 These diagnostics reflect Claude Code CLI output, not direct Anthropic API state.
 
-For automatic git evidence, `getGitStatus` uses `git status --porcelain=v2` and `getGitDiff` uses `git diff --no-ext-diff HEAD`, so staged and unstaged tracked changes are included. Untracked file content and multi-section diff manifests are not part of the current contract yet.
+For automatic git evidence, the Git Evidence Summary includes `git diff --stat HEAD`, `git diff --name-status HEAD`, and `git ls-files --others --exclude-standard`. `getGitStatus` uses `git status --porcelain=v2` and `getGitDiff` uses `git diff --no-ext-diff HEAD`, so staged and unstaged tracked changes are included. Untracked file content and multi-section diff manifests are not part of the current contract yet.
+
+Review packet blocks use a large context budget by default. Oversized blocks are truncated from the middle with a marker while preserving both the beginning and the end.

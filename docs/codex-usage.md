@@ -5,10 +5,10 @@ Use `cc_review` when you want a second opinion from Claude Code.
 Recommended mental model:
 
 - Codex owns the task state, implementation, verification, and final decision.
-- Claude Code provides bounded, high-effort Opus review at useful checkpoints.
+- Claude Code provides focused, high-effort Opus review at useful checkpoints.
 - Claude's output is evidence to synthesize, not an instruction to obey blindly.
 
-This workflow is Opus-oriented. The default `model: "opus"` assumes that the useful signal comes from spending Claude Code / Opus quota on bounded review, while Codex preserves execution state and makes the final decision.
+This workflow is Opus-oriented. The default `model: "opus"` assumes that the useful signal comes from spending Claude Code / Opus quota on deep review, while Codex preserves execution state and makes the final decision.
 
 Good review points:
 
@@ -31,7 +31,9 @@ Example tool input:
 
 Deep review is the default. A minimal call uses `opus`, `max`, `bypassPermissions`, `default` tools, `stream-json`, and a 1-hour cache TTL hint. Override these fields explicitly for a narrower run.
 
-For `review_diff` and `adversarial_review`, the server auto-discovers git evidence by default: porcelain v2 status plus `git diff --no-ext-diff HEAD`, which includes staged and unstaged tracked changes. Set `autoDiscoverGit: false` only when Codex is already passing an explicit diff or when you intentionally want a context-only review.
+When git discovery is enabled, the server adds a lightweight Git Evidence Summary with diff stat, name-status, and untracked file manifest. For `review_diff` and `adversarial_review`, it also auto-discovers raw git evidence by default: porcelain v2 status plus `git diff --no-ext-diff HEAD`, which includes staged and unstaged tracked changes. Set `autoDiscoverGit: false` only when Codex is already passing explicit evidence or when you intentionally want a context-only review.
+
+`cc_review` does not expose cost or turn caps. Timeout remains as service hang protection, not as a model capability limit.
 
 During the tool call, Codex may show real-time progress if its MCP client provides `_meta.progressToken`. If it does not, read the final `activityTail`, `transcriptTail`, and `diagnostics` fields.
 

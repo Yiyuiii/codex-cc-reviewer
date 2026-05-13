@@ -14,7 +14,6 @@ describe("CcReviewInputSchema", () => {
     expect(parsed.output).toBe("markdown");
     expect(parsed.permissionMode).toBe("bypassPermissions");
     expect(parsed.tools).toEqual(["default"]);
-    expect(parsed.maxTurns).toBeUndefined();
     expect(parsed.includeGitDiff).toBe(false);
     expect(parsed.includeGitStatus).toBe(false);
     expect(parsed.autoDiscoverGit).toBeUndefined();
@@ -35,6 +34,34 @@ describe("CcReviewInputSchema", () => {
         effort: "xhigh"
       })
     ).toThrow();
+  });
+
+  it("rejects removed cap fields instead of silently ignoring them", () => {
+    expect(() =>
+      CcReviewInputSchema.parse({
+        task: "review_diff",
+        context: "Review this diff.",
+        maxTurns: 4
+      })
+    ).toThrow(/unrecognized/i);
+
+    expect(() =>
+      CcReviewInputSchema.parse({
+        task: "review_diff",
+        context: "Review this diff.",
+        maxBudgetUsd: 2
+      })
+    ).toThrow(/unrecognized/i);
+  });
+
+  it("rejects unknown input keys", () => {
+    expect(() =>
+      CcReviewInputSchema.parse({
+        task: "review_plan",
+        context: "Review this plan.",
+        unexpected: true
+      })
+    ).toThrow(/unrecognized/i);
   });
 
   it("normalizes comma-separated tool strings", () => {

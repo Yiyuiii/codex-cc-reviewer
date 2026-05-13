@@ -150,12 +150,13 @@ enabled_tools = ["cc_review"]
 | --- | --- | --- |
 | 可信本地 owner workflow | `permissionMode: "bypassPermissions"`、`tools: ["default"]`、`redactSecrets: false` | 适合你自己的仓库、VM 或 dev container，并尽量保留原始审查证据。 |
 | 保守审查 | `permissionMode: "plan"` 或 `"default"`、`tools: ["Read", "Grep", "Glob"]`、`redactSecrets: true` | 适合敏感或共享仓库，让审查尽量保持只读。 |
-| 成本受限审查 | `maxBudgetUsd`、可选的 `maxTurns` 上限，可选 `cacheTtl: "5m"` | server 会把预算和 turn 限制转发给 Claude Code。适合大 diff 或重复审查。 |
+| 大上下文审查 | 默认设置，可选更高的 `maxContextChars` | review packet 使用较大的上下文预算，并在超大内容块中保留开头和结尾。 |
 
 默认会尽量按原文传递 review packet。`redactSecrets: true` 会启用 best-effort 脱敏，但它并不全面，也可能删除有用证据。
 
-`maxTurns` 默认不设置。Claude Code 审查经常会把 turn 用在读取文件这类很小的探索动作上，所以只有当你显式设置 `maxTurns` 时，server 才会把 turn 限制转发给 Claude Code。
-如果想控制审查成本但不限制 turn，优先使用 `maxBudgetUsd`。
+`cc_review` 不再暴露成本或 turn 上限。timeout 仍然保留，但它是防止服务挂死的保护，不是 Claude Code 能力限制。
+
+超大的 packet 内容块会从中间截断，同时保留开头和结尾。这样既保留结构和最新证据，又避免 packet 无限制增长。
 
 完整安全说明见 [docs/security.md](docs/security.md)。
 
@@ -208,7 +209,7 @@ MCP server 只暴露一个工具：`cc_review`。
 }
 ```
 
-对于 `review_diff` 和 `adversarial_review`，工具会默认自动收集 git status 和 `git diff HEAD` 证据，除非设置 `autoDiscoverGit: false`。`prompt` 仍然可用，但现在只是 `reviewFocus` 的兼容别名。
+启用 git discovery 时，工具会自动加入轻量 Git Evidence Summary：diff stat、name-status 和 untracked 文件清单。对于 `review_diff` 和 `adversarial_review`，工具还会默认收集原始 git status 和 `git diff HEAD` 证据，除非设置 `autoDiscoverGit: false`。`prompt` 仍然可用，但现在只是 `reviewFocus` 的兼容别名。
 
 本地 CLI 测试（`--review-focus` 可选，但通常有用）：
 

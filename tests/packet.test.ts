@@ -76,11 +76,14 @@ describe("buildReviewPacket", () => {
         includeGitDiff: true
       },
       {
+        getGitSummary: async () => "Summary",
         getGitStatus: async () => "M src/index.ts",
         getGitDiff: async () => "diff --git a/src/index.ts b/src/index.ts"
       }
     );
 
+    expect(packet).toContain("## Git Evidence Summary");
+    expect(packet).toContain("Summary");
     expect(packet).toContain("## Optional Git Status");
     expect(packet).toContain("M src/index.ts");
     expect(packet).toContain("## Optional Git Diff");
@@ -94,19 +97,22 @@ describe("buildReviewPacket", () => {
         autoDiscoverGit: undefined
       },
       {
+        getGitSummary: async () => "Diff Stat\n src/index.ts | 2 +-\nName Status\nM\tsrc/index.ts",
         getGitStatus: async () => "1 .M N... 100644 100644 100644 abc abc src/index.ts",
         getGitDiff: async () => "diff --git a/src/index.ts b/src/index.ts"
       }
     );
 
+    expect(packet).toContain("## Git Evidence Summary");
+    expect(packet).toContain("Name Status");
     expect(packet).toContain("## Optional Git Status");
     expect(packet).toContain("1 .M N...");
     expect(packet).toContain("## Optional Git Diff");
     expect(packet).toContain("diff --git a/src/index.ts b/src/index.ts");
   });
 
-  it("does not auto-discover git evidence for review_plan by default", async () => {
-    let gitCalls = 0;
+  it("auto-discovers lightweight git summary for review_plan by default", async () => {
+    const called: string[] = [];
 
     const packet = await buildReviewPacket(
       {
@@ -115,6 +121,73 @@ describe("buildReviewPacket", () => {
         autoDiscoverGit: undefined
       },
       {
+        getGitSummary: async () => {
+          called.push("summary");
+          return "Diff Stat\n src/index.ts | 2 +-\nName Status\nM\tsrc/index.ts";
+        },
+        getGitStatus: async () => {
+          called.push("status");
+          return "status";
+        },
+        getGitDiff: async () => {
+          called.push("diff");
+          return "diff";
+        }
+      }
+    );
+
+    expect(called).toEqual(["summary"]);
+    expect(packet).toContain("## Git Evidence Summary");
+    expect(packet).toContain("Name Status");
+    expect(packet).not.toContain("## Optional Git Status");
+    expect(packet).not.toContain("## Optional Git Diff");
+  });
+
+  it("auto-discovers raw git evidence for review_plan when explicitly requested", async () => {
+    const called: string[] = [];
+
+    const packet = await buildReviewPacket(
+      {
+        ...baseInput,
+        task: "review_plan",
+        autoDiscoverGit: true
+      },
+      {
+        getGitSummary: async () => {
+          called.push("summary");
+          return "Diff Stat\n src/index.ts | 2 +-\nName Status\nM\tsrc/index.ts";
+        },
+        getGitStatus: async () => {
+          called.push("status");
+          return "1 .M N... 100644 100644 100644 abc abc src/index.ts";
+        },
+        getGitDiff: async () => {
+          called.push("diff");
+          return "diff --git a/src/index.ts b/src/index.ts";
+        }
+      }
+    );
+
+    expect(called).toEqual(["summary", "status", "diff"]);
+    expect(packet).toContain("## Git Evidence Summary");
+    expect(packet).toContain("## Optional Git Status");
+    expect(packet).toContain("## Optional Git Diff");
+  });
+
+  it("does not auto-discover git evidence when autoDiscoverGit is false", async () => {
+    let gitCalls = 0;
+
+    const packet = await buildReviewPacket(
+      {
+        ...baseInput,
+        task: "review_plan",
+        autoDiscoverGit: false
+      },
+      {
+        getGitSummary: async () => {
+          gitCalls += 1;
+          return "summary";
+        },
         getGitStatus: async () => {
           gitCalls += 1;
           return "status";
@@ -127,6 +200,7 @@ describe("buildReviewPacket", () => {
     );
 
     expect(gitCalls).toBe(0);
+    expect(packet).not.toContain("## Git Evidence Summary");
     expect(packet).not.toContain("## Optional Git Status");
     expect(packet).not.toContain("## Optional Git Diff");
   });
@@ -149,6 +223,7 @@ describe("buildReviewPacket", () => {
         autoDiscoverGit: undefined
       },
       {
+        getGitSummary: async () => "",
         getGitStatus: async () => "",
         getGitDiff: async () => ""
       }
@@ -182,6 +257,20 @@ describe("buildReviewPacket", () => {
     expect(packet).toContain("[TRUNCATED");
   });
 
+  it("truncates oversized packet blocks from the middle and keeps both ends", async () => {
+    const packet = await buildReviewPacket({
+      ...baseInput,
+      context: `HEAD-IMPORTANT\n${"a".repeat(700)}\nMIDDLE-SHOULD-BE-OMITTED\n${"b".repeat(700)}\nTAIL-IMPORTANT`,
+      maxContextChars: 1_000
+    });
+
+    expect(packet).toContain("HEAD-IMPORTANT");
+    expect(packet).toContain("TAIL-IMPORTANT");
+    expect(packet).toContain("[TRUNCATED");
+    expect(packet).toContain("from middle");
+    expect(packet).not.toContain("MIDDLE-SHOULD-BE-OMITTED");
+  });
+
   it("applies the context limit to variable packet blocks, not each block independently", async () => {
     const packet = await buildReviewPacket(
       {
@@ -193,6 +282,7 @@ describe("buildReviewPacket", () => {
         maxContextChars: 1_500
       },
       {
+        getGitSummary: async () => "g".repeat(2_000),
         getGitStatus: async () => "s".repeat(2_000),
         getGitDiff: async () => "d".repeat(2_000)
       }
