@@ -2,6 +2,14 @@
   "name": "codex-cc-reviewer",
   "version": "0.1.1",
   "description": "Use Claude Code as an external reviewer from Codex.",
+  "homepage": "https://github.com/Yiyuiii/codex-cc-reviewer#readme",
+  "bugs": {
+    "url": "https://github.com/Yiyuiii/codex-cc-reviewer/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Yiyuiii/codex-cc-reviewer.git"
+  },
   "type": "module",
   "bin": {
     "codex-cc-reviewer": "dist/index.js"
