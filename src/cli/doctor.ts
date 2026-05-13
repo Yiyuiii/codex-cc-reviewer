@@ -6,6 +6,7 @@ import { getDefaultCodexConfigPath, hasCodexReviewerConfig } from "../config/cod
 export interface DoctorResult {
   name: string;
   ok: boolean;
+  level: "ok" | "warn" | "error";
   detail: string;
 }
 
@@ -22,16 +23,18 @@ export async function collectDoctorResults(): Promise<DoctorResult[]> {
   return [
     commandResult("Node", node),
     commandResult("npm", npm),
-    commandResult("Codex CLI", codex),
+    codexCliResult(codex),
     commandResult("Claude Code CLI", claude),
     {
       name: "Codex config",
       ok: configText.length > 0,
+      level: configText.length > 0 ? "ok" : "error",
       detail: configText.length > 0 ? configPath : `not found at ${configPath}`
     },
     {
       name: "MCP registration",
       ok: hasCodexReviewerConfig(configText),
+      level: hasCodexReviewerConfig(configText) ? "ok" : "error",
       detail: hasCodexReviewerConfig(configText)
         ? "codex_cc_reviewer is configured"
         : "codex_cc_reviewer is not configured"
@@ -45,20 +48,49 @@ export async function runDoctor(): Promise<DoctorResult[]> {
   writeLine("codex-cc-reviewer doctor");
   writeLine("");
   for (const result of results) {
-    writeLine(`${result.ok ? "[ok]" : "[!!]"} ${result.name}: ${result.detail}`);
+    writeLine(`${formatLevel(result.level)} ${result.name}: ${result.detail}`);
   }
 
-  if (results.some((result) => !result.ok)) {
+  if (shouldDoctorFail(results)) {
     process.exitCode = 1;
   }
 
   return results;
 }
 
+export function shouldDoctorFail(results: DoctorResult[]): boolean {
+  return results.some((result) => result.level === "error");
+}
+
 function commandResult(name: string, result: Awaited<ReturnType<typeof runCommandCheck>>): DoctorResult {
   return {
     name,
     ok: result.ok,
+    level: result.ok ? "ok" : "error",
     detail: result.output
   };
+}
+
+function codexCliResult(result: Awaited<ReturnType<typeof runCommandCheck>>): DoctorResult {
+  if (result.ok) {
+    return {
+      name: "Codex CLI",
+      ok: true,
+      level: "ok",
+      detail: result.output
+    };
+  }
+
+  return {
+    name: "Codex CLI",
+    ok: false,
+    level: "warn",
+    detail: "not runnable from PATH; Codex app MCP config may still work"
+  };
+}
+
+function formatLevel(level: DoctorResult["level"]): string {
+  if (level === "ok") return "[ok]";
+  if (level === "warn") return "[warn]";
+  return "[!!]";
 }
