@@ -4,7 +4,7 @@
   "description": "Use Claude Code as an external reviewer from Codex.",
   "type": "module",
   "bin": {
-    "codex-cc-reviewer": "./dist/index.js"
+    "codex-cc-reviewer": "dist/index.js"
   },
   "files": [
     "dist",
