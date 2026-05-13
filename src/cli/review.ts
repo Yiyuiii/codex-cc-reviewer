@@ -6,6 +6,12 @@ export interface LocalReviewOptions {
   task?: string;
   context?: string;
   prompt?: string;
+  originalGoal?: string;
+  reviewFocus?: string;
+  codexSummary?: string;
+  acceptanceCriteria?: string | string[];
+  knownRisks?: string | string[];
+  testsRun?: string | string[];
   model?: string;
   effort?: string;
   output?: string;
@@ -16,6 +22,7 @@ export interface LocalReviewOptions {
   cwd?: string;
   includeGitDiff?: boolean;
   includeGitStatus?: boolean;
+  autoDiscoverGit?: boolean;
   stream?: boolean;
   includePartialMessages?: boolean;
   includeHookEvents?: boolean;

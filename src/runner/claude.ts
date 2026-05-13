@@ -420,11 +420,30 @@ const REVIEW_JSON_SCHEMA = {
             enum: ["correctness", "security", "tests", "maintainability", "docs", "other"]
           },
           location: { type: "string" },
+          evidence: { type: "string" },
           issue: { type: "string" },
+          impact: { type: "string" },
           rationale: { type: "string" },
-          suggested_change: { type: "string" }
+          suggested_change: { type: "string" },
+          confidence: {
+            type: "string",
+            enum: ["high", "medium", "low"]
+          },
+          blocking: { type: "boolean" }
         },
         required: ["severity", "category", "location", "issue", "rationale", "suggested_change"],
+        additionalProperties: false
+      }
+    },
+    needs_verification: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          hypothesis: { type: "string" },
+          how_to_verify: { type: "string" }
+        },
+        required: ["hypothesis", "how_to_verify"],
         additionalProperties: false
       }
     },

@@ -195,16 +195,20 @@ The MCP server exposes one tool: `cc_review`.
 ```json
 {
   "task": "review_diff",
-  "prompt": "Look for correctness, regressions, and missed tests.",
-  "context": "Review the current change.",
-  "includeGitDiff": true
+  "originalGoal": "Add a safer release flow.",
+  "reviewFocus": "Look for correctness, regressions, and missed tests.",
+  "codexSummary": "Updated release docs and package metadata.",
+  "testsRun": ["npm test: passed"],
+  "context": "Review the current change."
 }
 ```
 
-Local CLI test with an optional prompt:
+For `review_diff` and `adversarial_review`, git status and `git diff HEAD` evidence are collected automatically unless `autoDiscoverGit` is set to `false`. `prompt` remains accepted as a backward-compatible alias for `reviewFocus`.
+
+Local CLI test with an optional review focus:
 
 ```bash
-codex-cc-reviewer review --task review_plan --prompt "Review the plan" --context "..."
+codex-cc-reviewer review --task review_plan --review-focus "Review the plan" --context "..."
 ```
 
 See [docs/tool-contract.md](docs/tool-contract.md) for all input and output fields.

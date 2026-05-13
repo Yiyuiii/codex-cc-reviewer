@@ -1,7 +1,7 @@
 import { execa } from "execa";
 
 export async function getGitStatus(cwd = process.cwd()): Promise<string> {
-  const result = await execa("git", ["status", "--short"], {
+  const result = await execa("git", ["status", "--porcelain=v2"], {
     cwd,
     reject: false
   });

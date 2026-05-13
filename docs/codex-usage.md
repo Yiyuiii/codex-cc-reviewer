@@ -22,12 +22,16 @@ Example tool input:
 ```json
 {
   "task": "review_plan",
+  "originalGoal": "Implement the requested feature without regressing existing behavior.",
+  "reviewFocus": "Look for missed steps and risky assumptions.",
   "context": "Review this implementation plan for missed steps and risky assumptions.",
   "output": "markdown"
 }
 ```
 
 Deep review is the default. A minimal call uses `opus`, `max`, `bypassPermissions`, `default` tools, `stream-json`, and a 1-hour cache TTL hint. Override these fields explicitly for a narrower run.
+
+For `review_diff` and `adversarial_review`, the server auto-discovers git evidence by default: porcelain v2 status plus `git diff --no-ext-diff HEAD`, which includes staged and unstaged tracked changes. Set `autoDiscoverGit: false` only when Codex is already passing an explicit diff or when you intentionally want a context-only review.
 
 During the tool call, Codex may show real-time progress if its MCP client provides `_meta.progressToken`. If it does not, read the final `activityTail`, `transcriptTail`, and `diagnostics` fields.
 

@@ -8,7 +8,13 @@ Input:
 
 - `task`: `review_plan`, `review_diff`, `review_doc`, or `adversarial_review`
 - `context`: required review context
-- `prompt`: optional extra goal
+- `originalGoal`: optional original user goal or acceptance context
+- `acceptanceCriteria`: optional string or array of acceptance criteria
+- `reviewFocus`: optional focus for this review run
+- `prompt`: backward-compatible alias for `reviewFocus`
+- `codexSummary`: optional Codex implementation summary
+- `knownRisks`: optional string or array of risks Codex already knows about
+- `testsRun`: optional string or array of verification commands/results already run
 - `model`: default `opus`
 - `effort`: default `max`
 - `output`: `markdown` or `json`
@@ -19,6 +25,7 @@ Input:
 - `cwd`: optional working directory
 - `includeGitDiff`: default `false`
 - `includeGitStatus`: default `false`
+- `autoDiscoverGit`: optional. When omitted, `review_diff` and `adversarial_review` automatically include git status and diff evidence.
 - `stream`: default `true`; uses Claude Code `stream-json`
 - `includePartialMessages`: default `true`
 - `includeHookEvents`: default `true`
@@ -55,3 +62,5 @@ While the tool is running, the server sends MCP `notifications/progress` when th
 - `disabled`: the request used `cacheTtl = "5m"` and did not request the 1-hour cache hint.
 
 These diagnostics reflect Claude Code CLI output, not direct Anthropic API state.
+
+For automatic git evidence, `getGitStatus` uses `git status --porcelain=v2` and `getGitDiff` uses `git diff --no-ext-diff HEAD`, so staged and unstaged tracked changes are included. Untracked file content and multi-section diff manifests are not part of the current contract yet.

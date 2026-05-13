@@ -55,9 +55,28 @@ const ToolsSchema = z.preprocess((value) => {
     .filter(Boolean);
 }, z.array(z.string().min(1)).default(["default"]));
 
+const NonEmptyStringSchema = z.string().trim().min(1);
+
+const StringListSchema = z.preprocess((value) => {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed ? [trimmed] : undefined;
+  }
+
+  return value;
+}, z.array(NonEmptyStringSchema).optional()).transform((value) =>
+  value?.length ? value : undefined
+).optional();
+
 export const CcReviewInputSchema = z.object({
   task: ReviewTaskSchema,
-  prompt: z.string().trim().min(1).optional(),
+  prompt: NonEmptyStringSchema.optional(),
+  originalGoal: NonEmptyStringSchema.optional(),
+  reviewFocus: NonEmptyStringSchema.optional(),
+  codexSummary: NonEmptyStringSchema.optional(),
+  acceptanceCriteria: StringListSchema,
+  knownRisks: StringListSchema,
+  testsRun: StringListSchema,
   context: z.string().min(1),
   model: z.string().trim().min(1).default("opus"),
   effort: ClaudeEffortSchema.default("max"),
@@ -69,6 +88,7 @@ export const CcReviewInputSchema = z.object({
   cwd: z.string().trim().min(1).optional(),
   includeGitDiff: z.boolean().default(false),
   includeGitStatus: z.boolean().default(false),
+  autoDiscoverGit: z.boolean().optional(),
   redactSecrets: z.boolean().default(false),
   maxContextChars: z.number().int().min(1_000).max(1_000_000).default(120_000),
   stream: z.boolean().default(true),

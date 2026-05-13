@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.4
+
+- Add structured packet fields for original goal, review focus, Codex summary, acceptance criteria, known risks, and tests run.
+- Treat `prompt` as a backward-compatible alias for `reviewFocus`.
+- Auto-discover git evidence for `review_diff` and `adversarial_review`.
+- Include staged tracked changes by switching diff collection to `git diff --no-ext-diff HEAD`.
+- Switch status collection to `git status --porcelain=v2`.
+- Add packet diagnostics when diff review discovers no git evidence.
+- Extend JSON review schema with optional evidence, impact, confidence, blocking, and verification fields.
+
 ## 0.1.3
 
 - Fix real Claude Code execution with execa v9 by mapping internal cancellation signals to `cancelSignal`.

@@ -197,16 +197,20 @@ MCP server 只暴露一个工具：`cc_review`。
 ```json
 {
   "task": "review_diff",
-  "prompt": "请重点审查正确性、回归风险和遗漏测试。",
-  "context": "请审阅当前改动。",
-  "includeGitDiff": true
+  "originalGoal": "增加更安全的发布流程。",
+  "reviewFocus": "请重点审查正确性、回归风险和遗漏测试。",
+  "codexSummary": "更新了发布文档和 package metadata。",
+  "testsRun": ["npm test: passed"],
+  "context": "请审阅当前改动。"
 }
 ```
 
-本地 CLI 测试（`--prompt` 可选，但通常有用）：
+对于 `review_diff` 和 `adversarial_review`，工具会默认自动收集 git status 和 `git diff HEAD` 证据，除非设置 `autoDiscoverGit: false`。`prompt` 仍然可用，但现在只是 `reviewFocus` 的兼容别名。
+
+本地 CLI 测试（`--review-focus` 可选，但通常有用）：
 
 ```bash
-codex-cc-reviewer review --task review_plan --prompt "审查这个计划" --context "..."
+codex-cc-reviewer review --task review_plan --review-focus "审查这个计划" --context "..."
 ```
 
 完整输入和输出字段见 [docs/tool-contract.md](docs/tool-contract.md)。
