@@ -66,6 +66,22 @@ While the tool is running, the server sends MCP `notifications/progress` when th
 
 These diagnostics reflect Claude Code CLI output, not direct Anthropic API state.
 
-For automatic git evidence, the Git Evidence Summary includes `git diff --stat HEAD`, `git diff --name-status HEAD`, and `git ls-files --others --exclude-standard`. `getGitStatus` uses `git status --porcelain=v2` and `getGitDiff` uses `git diff --no-ext-diff HEAD`, so staged and unstaged tracked changes are included. Untracked file content and multi-section diff manifests are not part of the current contract yet.
+For automatic git evidence, the Git Evidence Summary includes `git diff --stat HEAD`, `git diff --name-status HEAD`, and `git ls-files --others --exclude-standard`. `getGitStatus` uses `git status --porcelain=v2` and `getGitDiff` uses `git diff --no-ext-diff HEAD`, so staged and unstaged tracked changes are included. Untracked file content is listed in summary form but is not embedded by default.
+
+For `review_diff`, `adversarial_review`, or explicit `includeGitDiff: true`, the raw git diff is routed before it enters the packet:
+
+- `Changed Files Manifest`: markdown table with `File`, `Status`, `Inclusion`, `+/-`, and `Reason`.
+- `Context Routing Guidance`: tells Claude Code to inspect `partial` or `omitted` files with available tools when they matter.
+- `Routed Git Diff Evidence`: per-file diff bodies selected by the router.
+
+`Inclusion` values:
+
+- `full`: the file diff body is included completely.
+- `partial`: the file diff body is included with head/tail preservation and middle truncation.
+- `omitted`: the file is listed in the manifest but its diff body is not embedded.
+
+The router's diff budget governs embedded diff body content. Structural markdown such as the manifest table, context-routing guidance, and section wrappers is added on top so Claude Code still receives the navigation map needed to inspect partial or omitted files.
+
+Default omitted categories are binary diff blocks, lockfiles, generated package lock output, minified assets, and common build output paths such as `dist/`, `build/`, `coverage/`, `.next/`, and `node_modules/`. These omissions are packet-routing decisions only; Claude Code still has repository tools available and should inspect omitted files when they may be relevant.
 
 Review packet blocks use a large context budget by default. Oversized blocks are truncated from the middle with a marker while preserving both the beginning and the end.

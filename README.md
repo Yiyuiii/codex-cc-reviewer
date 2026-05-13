@@ -20,7 +20,7 @@ It is intentionally narrow:
 - Codex remains the orchestrator and final decision-maker
 - no broad bidirectional agent bridge
 
-Status: early `0.1.x`. The core workflow is usable, but the project is still pre-1.0 and intentionally conservative in scope.
+Status: early `0.2.x`. The core workflow is usable, but the project is still pre-1.0 and intentionally conservative in scope.
 
 Proof of work: this project is roughly 99% developed and maintained by Codex itself, with Claude Code / Opus used through `cc_review` as an advisory reviewer.
 
@@ -31,6 +31,7 @@ Proof of work: this project is roughly 99% developed and maintained by Codex its
 - Ask for adversarial review on risky changes.
 - Keep Codex in control instead of creating a broad multi-agent bridge.
 - See what Claude Code did: tool activity, structured timeline events, transcript snippets, cache diagnostics, and cost.
+- Send Claude Code a compact git evidence map instead of blindly stuffing every diff byte into the packet.
 
 ## The Opus case
 
@@ -156,6 +157,17 @@ Review packets are sent as faithfully as possible by default. `redactSecrets: tr
 
 Oversized packet blocks are truncated from the middle, keeping both the start and the end. This preserves framing and recent evidence while avoiding unbounded packet growth.
 
+### Git context routing
+
+For `review_diff` and `adversarial_review`, v0.2 routes git evidence instead of inserting one monolithic diff block. The packet includes:
+
+- `Git Evidence Summary`: diff stat, name-status, and untracked file manifest.
+- `Changed Files Manifest`: file, status, inclusion (`full`, `partial`, `omitted`), changed line counts, and routing reason.
+- `Context Routing Guidance`: tells Claude Code when to inspect partial or omitted files with its own tools.
+- `Routed Git Diff Evidence`: selected per-file diff bodies.
+
+This is the intended tradeoff: Codex provides a reliable map and enough evidence to start review; Claude Code can spend its own tool calls on files that matter instead of receiving a huge undifferentiated diff dump. Generated paths, lockfiles, dist/build output, and binary diffs are listed in the manifest but omitted from the diff body by default.
+
 See [docs/security.md](docs/security.md) for the full security note.
 
 ## Usage Examples
@@ -207,7 +219,7 @@ The MCP server exposes one tool: `cc_review`.
 }
 ```
 
-The tool automatically includes a lightweight Git Evidence Summary when git discovery is enabled: diff stat, name-status, and untracked file manifest. For `review_diff` and `adversarial_review`, it also collects raw git status and `git diff HEAD` evidence by default unless `autoDiscoverGit` is set to `false`. `prompt` remains accepted as a backward-compatible alias for `reviewFocus`.
+The tool automatically includes a lightweight Git Evidence Summary when git discovery is enabled: diff stat, name-status, and untracked file manifest. For `review_diff` and `adversarial_review`, it also collects raw git status and `git diff HEAD` evidence by default unless `autoDiscoverGit` is set to `false`; the diff is routed into a manifest plus selected per-file evidence. `prompt` remains accepted as a backward-compatible alias for `reviewFocus`.
 
 Local CLI test with an optional review focus:
 

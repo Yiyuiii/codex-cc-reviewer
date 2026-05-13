@@ -13,7 +13,7 @@ const program = new Command();
 program
   .name("codex-cc-reviewer")
   .description("Use Claude Code as an external reviewer from Codex.")
-  .version("0.1.6");
+  .version("0.2.0");
 
 program
   .command("serve")

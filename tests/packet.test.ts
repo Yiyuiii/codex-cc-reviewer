@@ -86,8 +86,47 @@ describe("buildReviewPacket", () => {
     expect(packet).toContain("Summary");
     expect(packet).toContain("## Optional Git Status");
     expect(packet).toContain("M src/index.ts");
-    expect(packet).toContain("## Optional Git Diff");
+    expect(packet).toContain("## Changed Files Manifest");
+    expect(packet).toContain("## Routed Git Diff Evidence");
     expect(packet).toContain("diff --git a/src/index.ts b/src/index.ts");
+  });
+
+  it("routes git diff evidence through manifest, guidance, and per-file sections", async () => {
+    const packet = await buildReviewPacket(
+      {
+        ...baseInput,
+        includeGitDiff: true
+      },
+      {
+        getGitSummary: async () => "Summary",
+        getGitDiff: async () => [
+          "diff --git a/src/foo.ts b/src/foo.ts",
+          "index 1111111..2222222 100644",
+          "--- a/src/foo.ts",
+          "+++ b/src/foo.ts",
+          "@@ -1 +1,2 @@",
+          " const keep = true;",
+          "+export const added = true;",
+          "diff --git a/package-lock.json b/package-lock.json",
+          "index 3333333..4444444 100644",
+          "--- a/package-lock.json",
+          "+++ b/package-lock.json",
+          "@@ -1 +1 @@",
+          "-old",
+          "+new"
+        ].join("\n")
+      }
+    );
+
+    expect(packet).toContain("## Changed Files Manifest");
+    expect(packet).toContain("| src/foo.ts | modified | full | +1/-0 | source diff within budget |");
+    expect(packet).toContain("| package-lock.json | modified | omitted | +1/-1 | generated_or_lockfile |");
+    expect(packet).toContain("## Context Routing Guidance");
+    expect(packet).toContain("partial or omitted");
+    expect(packet).toContain("## Routed Git Diff Evidence");
+    expect(packet).toContain("### src/foo.ts");
+    expect(packet).toContain("+export const added = true;");
+    expect(packet).not.toContain("```diff\n-old\n+new");
   });
 
   it("auto-discovers git evidence for review_diff by default", async () => {
@@ -107,7 +146,7 @@ describe("buildReviewPacket", () => {
     expect(packet).toContain("Name Status");
     expect(packet).toContain("## Optional Git Status");
     expect(packet).toContain("1 .M N...");
-    expect(packet).toContain("## Optional Git Diff");
+    expect(packet).toContain("## Changed Files Manifest");
     expect(packet).toContain("diff --git a/src/index.ts b/src/index.ts");
   });
 
@@ -171,7 +210,7 @@ describe("buildReviewPacket", () => {
     expect(called).toEqual(["summary", "status", "diff"]);
     expect(packet).toContain("## Git Evidence Summary");
     expect(packet).toContain("## Optional Git Status");
-    expect(packet).toContain("## Optional Git Diff");
+    expect(packet).toContain("## Changed Files Manifest");
   });
 
   it("does not auto-discover git evidence when autoDiscoverGit is false", async () => {

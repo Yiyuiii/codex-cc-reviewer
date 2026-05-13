@@ -33,6 +33,8 @@ Deep review is the default. A minimal call uses `opus`, `max`, `bypassPermission
 
 When git discovery is enabled, the server adds a lightweight Git Evidence Summary with diff stat, name-status, and untracked file manifest. For `review_diff` and `adversarial_review`, it also auto-discovers raw git evidence by default: porcelain v2 status plus `git diff --no-ext-diff HEAD`, which includes staged and unstaged tracked changes. Set `autoDiscoverGit: false` only when Codex is already passing explicit evidence or when you intentionally want a context-only review.
 
+For diff reviews, the packet now uses hybrid context routing. Codex sends a changed-files manifest, routing guidance, and selected per-file diff bodies. Claude Code should treat that as a navigation map: inspect files marked `partial` or `omitted` with Read/Grep/Bash when those files may affect correctness. This balances Codex token use against Claude Code tool use without limiting Claude's default model, effort, tools, or permissions.
+
 `cc_review` does not expose cost or turn caps. Timeout remains as service hang protection, not as a model capability limit.
 
 During the tool call, Codex may show real-time progress if its MCP client provides `_meta.progressToken`. If it does not, read the final `activityTail`, `transcriptTail`, and `diagnostics` fields.

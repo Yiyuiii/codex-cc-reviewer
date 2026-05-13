@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.0
+
+- Add git diff parsing and context routing for diff-oriented reviews.
+- Replace monolithic diff packet insertion with `Changed Files Manifest`, `Context Routing Guidance`, and `Routed Git Diff Evidence`.
+- Include small source diffs fully, include large source diffs partially with head/tail preservation, and omit binary/generated/lockfile/build-output diffs from embedded bodies while keeping them visible in the manifest.
+- Preserve the deep Claude Code defaults from 0.1.6: `opus`, `max`, dangerous trusted-local permission mode, default tools, no cost cap, and no turn cap.
+- Document the Codex/Claude tradeoff: Codex sends a reliable map plus selected evidence; Claude Code inspects partial or omitted files when needed.
+
 ## 0.1.6
 
 - Remove public `maxTurns` and `maxBudgetUsd` review caps; `cc_review` no longer forwards Claude Code cost or turn limits.

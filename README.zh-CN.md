@@ -20,7 +20,7 @@
 - Codex 仍然负责调度和最终决策
 - 不做泛化的双向 agent bridge
 
-状态：早期 `0.1.x`。核心流程可用，但项目仍是 pre-1.0，并且会刻意保持聚焦。
+状态：早期 `0.2.x`。核心流程可用，但项目仍是 pre-1.0，并且会刻意保持聚焦。
 
 Proof of work：本项目约 99% 由 Codex 开发和维护；Claude Code / Opus 通过 `cc_review` 作为建议性审查者参与。
 
@@ -31,6 +31,7 @@ Proof of work：本项目约 99% 由 Codex 开发和维护；Claude Code / Opus 
 - 对高风险变更做 adversarial review。
 - 保持 Codex 主控，而不是做一个泛化多 agent bridge。
 - 能看到 Claude Code 做了什么：工具活动、结构化 timeline、transcript 片段、缓存诊断和成本。
+- 给 Claude Code 传递紧凑的 git 证据地图，而不是盲目把所有 diff 字节塞进 packet。
 
 ## Opus 的具体使用场景
 
@@ -158,6 +159,17 @@ enabled_tools = ["cc_review"]
 
 超大的 packet 内容块会从中间截断，同时保留开头和结尾。这样既保留结构和最新证据，又避免 packet 无限制增长。
 
+### Git 上下文路由
+
+对于 `review_diff` 和 `adversarial_review`，v0.2 不再把 diff 当作一个巨大文本块直接塞进 packet，而是先做证据路由。packet 会包含：
+
+- `Git Evidence Summary`：diff stat、name-status 和 untracked 文件清单。
+- `Changed Files Manifest`：文件、状态、纳入方式（`full`、`partial`、`omitted`）、变更行数和路由原因。
+- `Context Routing Guidance`：明确告诉 Claude Code 何时需要用自己的工具检查 partial 或 omitted 文件。
+- `Routed Git Diff Evidence`：被选中的逐文件 diff 证据。
+
+这个取舍是有意的：Codex 负责提供可靠地图和足够启动审查的证据；Claude Code 再把自己的工具调用花在真正重要的文件上，而不是被一个巨大、无结构的 diff dump 占满上下文。生成物路径、lockfile、dist/build 输出和二进制 diff 默认会出现在 manifest 里，但不会进入 diff body。
+
 完整安全说明见 [docs/security.md](docs/security.md)。
 
 ## 使用场景
@@ -209,7 +221,7 @@ MCP server 只暴露一个工具：`cc_review`。
 }
 ```
 
-启用 git discovery 时，工具会自动加入轻量 Git Evidence Summary：diff stat、name-status 和 untracked 文件清单。对于 `review_diff` 和 `adversarial_review`，工具还会默认收集原始 git status 和 `git diff HEAD` 证据，除非设置 `autoDiscoverGit: false`。`prompt` 仍然可用，但现在只是 `reviewFocus` 的兼容别名。
+启用 git discovery 时，工具会自动加入轻量 Git Evidence Summary：diff stat、name-status 和 untracked 文件清单。对于 `review_diff` 和 `adversarial_review`，工具还会默认收集原始 git status 和 `git diff HEAD` 证据，除非设置 `autoDiscoverGit: false`；diff 会被路由成 manifest 加逐文件精选证据。`prompt` 仍然可用，但现在只是 `reviewFocus` 的兼容别名。
 
 本地 CLI 测试（`--review-focus` 可选，但通常有用）：
 

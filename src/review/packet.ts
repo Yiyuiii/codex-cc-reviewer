@@ -1,6 +1,9 @@
 import { getGitDiff as defaultGetGitDiff } from "../git/diff.js";
 import { getGitSummary as defaultGetGitSummary } from "../git/summary.js";
 import { getGitStatus as defaultGetGitStatus } from "../git/status.js";
+import { truncateMiddle } from "../utils/truncate.js";
+import { routeDiffForReview } from "./context-router.js";
+import { parseUnifiedDiff } from "./diff-parser.js";
 import { REVIEWER_PROMPT } from "./prompts.js";
 import type { CcReviewInput } from "./schema.js";
 
@@ -82,7 +85,7 @@ export async function buildReviewPacket(
   }
 
   if (budgeted.gitDiff?.trim()) {
-    sections.push("## Optional Git Diff", fenced(budgeted.gitDiff, "diff"));
+    sections.push(budgeted.gitDiff);
   }
 
   if (budgeted.diagnostics !== undefined) {
@@ -162,7 +165,10 @@ function prepareVariableBlocks(
     if (block.value === undefined) continue;
 
     const blockBudget = Math.max(100, Math.floor((variableBudget * block.weight) / totalWeight));
-    prepared[block.key] = prepareBlock(block.value, blockBudget, input.redactSecrets);
+    prepared[block.key] =
+      block.key === "gitDiff"
+        ? prepareGitDiffBlock(block.value, blockBudget, input.redactSecrets)
+        : prepareBlock(block.value, blockBudget, input.redactSecrets);
   }
 
   return {
@@ -182,7 +188,14 @@ function prepareVariableBlocks(
 
 function prepareBlock(value: string, maxChars: number, shouldRedact: boolean): string {
   const redacted = shouldRedact ? redactSecrets(value) : value;
-  return limitChars(redacted, maxChars);
+  return truncateMiddle(redacted, maxChars);
+}
+
+function prepareGitDiffBlock(value: string, maxChars: number, shouldRedact: boolean): string {
+  const redacted = shouldRedact ? redactSecrets(value) : value;
+  const parsed = parseUnifiedDiff(redacted);
+
+  return routeDiffForReview(parsed, { totalBudgetChars: maxChars }).markdown;
 }
 
 export function redactSecrets(value: string): string {
@@ -192,22 +205,6 @@ export function redactSecrets(value: string): string {
       /\b(password|passwd|api[_-]?key|secret|token)\b\s*[:=]\s*("[^"]*"|'[^']*'|[^\s,;]+)/gi,
       "$1=[REDACTED]"
     );
-}
-
-function limitChars(value: string, maxChars: number): string {
-  if (value.length <= maxChars) {
-    return value;
-  }
-
-  const markerFor = (omitted: number) => `\n\n[TRUNCATED ${omitted} chars from middle]\n\n`;
-  const initialMarker = markerFor(value.length);
-  const availableChars = Math.max(0, maxChars - initialMarker.length);
-  const headChars = Math.ceil(availableChars * 0.6);
-  const tailChars = Math.max(0, availableChars - headChars);
-  const omitted = Math.max(0, value.length - headChars - tailChars);
-  const marker = markerFor(omitted);
-
-  return `${value.slice(0, headChars)}${marker}${tailChars ? value.slice(-tailChars) : ""}`;
 }
 
 function fenced(value: string, language: string): string {
