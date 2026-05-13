@@ -11,7 +11,6 @@ const baseInput: CcReviewInput = {
   output: "markdown",
   permissionMode: "plan",
   tools: ["Read"],
-  maxTurns: 8,
   includeGitDiff: false,
   includeGitStatus: false,
   autoDiscoverGit: false,

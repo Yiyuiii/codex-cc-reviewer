@@ -83,7 +83,7 @@ export const CcReviewInputSchema = z.object({
   output: ReviewOutputModeSchema.default("markdown"),
   permissionMode: ClaudePermissionModeSchema.default("bypassPermissions"),
   tools: ToolsSchema,
-  maxTurns: z.number().int().min(1).max(30).default(8),
+  maxTurns: z.number().int().min(1).max(30).optional(),
   maxBudgetUsd: z.number().positive().max(20).optional(),
   cwd: z.string().trim().min(1).optional(),
   includeGitDiff: z.boolean().default(false),

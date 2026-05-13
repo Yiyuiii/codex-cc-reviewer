@@ -20,7 +20,7 @@ Input:
 - `output`: `markdown` or `json`
 - `permissionMode`: `acceptEdits`, `auto`, `bypassPermissions`, `default`, `dontAsk`, or `plan`; default `bypassPermissions`
 - `tools`: string or array; default `["default"]`
-- `maxTurns`: default `8`
+- `maxTurns`: optional. When omitted, no Claude Code turn limit is passed; set it only for budget-limited runs. To control cost without limiting turns, prefer `maxBudgetUsd`.
 - `maxBudgetUsd`: optional
 - `cwd`: optional working directory
 - `includeGitDiff`: default `false`

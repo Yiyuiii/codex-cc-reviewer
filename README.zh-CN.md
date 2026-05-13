@@ -150,9 +150,12 @@ enabled_tools = ["cc_review"]
 | --- | --- | --- |
 | 可信本地 owner workflow | `permissionMode: "bypassPermissions"`、`tools: ["default"]`、`redactSecrets: false` | 适合你自己的仓库、VM 或 dev container，并尽量保留原始审查证据。 |
 | 保守审查 | `permissionMode: "plan"` 或 `"default"`、`tools: ["Read", "Grep", "Glob"]`、`redactSecrets: true` | 适合敏感或共享仓库，让审查尽量保持只读。 |
-| 成本受限审查 | `maxBudgetUsd`、更低的 `maxTurns`，可选 `cacheTtl: "5m"` | server 会把预算和 turn 限制转发给 Claude Code。适合大 diff 或重复审查。 |
+| 成本受限审查 | `maxBudgetUsd`、可选的 `maxTurns` 上限，可选 `cacheTtl: "5m"` | server 会把预算和 turn 限制转发给 Claude Code。适合大 diff 或重复审查。 |
 
 默认会尽量按原文传递 review packet。`redactSecrets: true` 会启用 best-effort 脱敏，但它并不全面，也可能删除有用证据。
+
+`maxTurns` 默认不设置。Claude Code 审查经常会把 turn 用在读取文件这类很小的探索动作上，所以只有当你显式设置 `maxTurns` 时，server 才会把 turn 限制转发给 Claude Code。
+如果想控制审查成本但不限制 turn，优先使用 `maxBudgetUsd`。
 
 完整安全说明见 [docs/security.md](docs/security.md)。
 

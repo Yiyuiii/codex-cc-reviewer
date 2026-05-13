@@ -38,7 +38,7 @@ Defaults are intentionally conservative:
 
 - `permissionMode`: `plan`
 - `tools`: `Read`
-- `maxTurns`: `8`
+- `maxTurns`: unset by default; opt in only for budget-limited runs
 - `maxBudgetUsd`: unset unless requested
 - `includeGitDiff`: `false`
 - `includeGitStatus`: `false`

@@ -16,7 +16,6 @@ const baseInput: CcReviewInput = {
   output: "markdown",
   permissionMode: "bypassPermissions",
   tools: ["default"],
-  maxTurns: 8,
   includeGitDiff: false,
   includeGitStatus: false,
   redactSecrets: true,
@@ -135,13 +134,40 @@ describe("runClaudeReview", () => {
       "--verbose",
       "--include-partial-messages",
       "--include-hook-events",
-      "--max-turns",
-      "8",
       "--no-session-persistence"
     ]);
+    expect(observed?.[1]).not.toContain("--max-turns");
     expect(observed?.[2].input).toBe("PACKET");
     expect(observed?.[2].reject).toBe(false);
     expect(observed?.[2].env?.ENABLE_PROMPT_CACHING_1H).toBe("1");
+  });
+
+  it("passes max-turns only when explicitly requested", async () => {
+    let observed: Parameters<ClaudeExecutor> | undefined;
+    const execute: ClaudeExecutor = async (...args) => {
+      observed = args;
+      return {
+        stdout: JSON.stringify({ result: "No findings." }),
+        stderr: "",
+        exitCode: 0
+      };
+    };
+
+    await runClaudeReview(
+      {
+        ...baseInput,
+        maxTurns: 4,
+        stream: false
+      },
+      {
+        execute,
+        now: fakeClock([1, 2]),
+        buildPacket: async () => "PACKET"
+      }
+    );
+
+    expect(observed?.[1]).toContain("--max-turns");
+    expect(observed?.[1]).toContain("4");
   });
 
   it("overrides inherited 1h cache env when cacheTtl is 5m", async () => {

@@ -148,9 +148,12 @@ These are example configurations, not built-in profile names:
 | --- | --- | --- |
 | Trusted local owner workflow | `permissionMode: "bypassPermissions"`, `tools: ["default"]`, `redactSecrets: false` | Full-fidelity local workflow for your own repo, VM, or dev container. |
 | Conservative review | `permissionMode: "plan"` or `"default"`, `tools: ["Read", "Grep", "Glob"]`, `redactSecrets: true` | Use for sensitive or shared repositories where review should stay mostly read-only. |
-| Budget-limited review | `maxBudgetUsd`, lower `maxTurns`, optionally `cacheTtl: "5m"` | The server forwards budget and turn limits to Claude Code. Use for large diffs or repeated reviews. |
+| Budget-limited review | `maxBudgetUsd`, an optional `maxTurns` cap, optionally `cacheTtl: "5m"` | The server forwards budget and turn limits to Claude Code. Use for large diffs or repeated reviews. |
 
 Review packets are sent as faithfully as possible by default. `redactSecrets: true` enables best-effort redaction, but it is not comprehensive and can remove useful evidence.
+
+`maxTurns` is intentionally unset by default. Claude Code review often spends turns on small exploratory actions such as reading files, so turn limits are only forwarded when you explicitly set `maxTurns`.
+To control review cost without limiting turns, prefer `maxBudgetUsd`.
 
 See [docs/security.md](docs/security.md) for the full security note.
 

@@ -32,6 +32,27 @@ describe("runLocalReview", () => {
     expect(observed?.maxTurns).toBe(4);
     expect(writes.join("")).toContain("Looks reasonable.");
   });
+
+  it("leaves maxTurns unset when the CLI option is omitted", async () => {
+    let observed: CcReviewInput | undefined;
+
+    const result = await runLocalReview(
+      {
+        task: "review_doc",
+        context: "Review this doc."
+      },
+      {
+        runReview: async (input) => {
+          observed = input;
+          return reviewOutput(input, "OK.");
+        },
+        write: () => undefined
+      }
+    );
+
+    expect(result.ok).toBe(true);
+    expect(observed?.maxTurns).toBeUndefined();
+  });
 });
 
 function reviewOutput(input: CcReviewInput, review: string): CcReviewOutput {

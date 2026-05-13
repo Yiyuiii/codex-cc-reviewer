@@ -14,7 +14,7 @@ describe("CcReviewInputSchema", () => {
     expect(parsed.output).toBe("markdown");
     expect(parsed.permissionMode).toBe("bypassPermissions");
     expect(parsed.tools).toEqual(["default"]);
-    expect(parsed.maxTurns).toBe(8);
+    expect(parsed.maxTurns).toBeUndefined();
     expect(parsed.includeGitDiff).toBe(false);
     expect(parsed.includeGitStatus).toBe(false);
     expect(parsed.autoDiscoverGit).toBeUndefined();

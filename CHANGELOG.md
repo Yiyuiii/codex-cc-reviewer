@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.5
+
+- Stop passing a default Claude Code `--max-turns` limit.
+- Keep `maxTurns` available as an explicit budget-control option.
+- Document that turn limits are opt-in because review turns can be small exploratory actions.
+
 ## 0.1.4
 
 - Add structured packet fields for original goal, review focus, Codex summary, acceptance criteria, known risks, and tests run.
