@@ -4,7 +4,7 @@
 
 **Goal:** Add a `next` prerelease branch and make GitHub Actions publish prerelease tags to npm `next` and stable tags to npm `latest`.
 
-**Architecture:** Keep a single `release.yml` trusted-publishing workflow, but derive the npm dist-tag from the pushed git tag. Add ancestry checks so prerelease tags must come from `origin/next` and stable tags must come from `origin/main`. CI runs on both `next` and `main`.
+**Architecture:** Keep a single `release.yml` trusted-publishing workflow, but derive the npm dist-tag from the pushed git tag. Add ancestry checks so prerelease tags must come from `origin/next` and stable tags must come from `origin/main`. CI runs on both `next` and `main`. Stable promotion is manual and requires local Codex validation of the rc package after Codex restart.
 
 **Tech Stack:** GitHub Actions YAML, npm trusted publishing/OIDC, npm semver prerelease versions, existing TypeScript/Node test suite.
 
@@ -212,7 +212,34 @@ Expected prerelease version:
 0.2.1-rc.0
 ```
 
-### Task 6: Promote to Stable `v0.2.1`
+### Task 6: Validate the RC in Local Codex
+
+**Files:**
+- No new source files.
+
+- [ ] Install the exact rc package or npm `next` locally:
+
+```powershell
+npm install -g codex-cc-reviewer@next
+```
+
+- [ ] Refresh Codex MCP configuration and run the local diagnostics:
+
+```powershell
+codex-cc-reviewer install
+codex-cc-reviewer doctor
+```
+
+- [ ] Restart Codex so it reloads the MCP server package.
+- [ ] From Codex, call `cc_review` against this repository for a smoke test.
+- [ ] Confirm `cc_review` returns without MCP transport errors.
+- [ ] Confirm the final result contains a non-empty review plus captured detail such as activity, transcript, cache, diagnostics, or cost fields when Claude Code reports them.
+- [ ] Confirm the review refers to repository evidence, files, or commands rather than only confirming connectivity.
+- [ ] Do not merge to `main` until this local Codex rc validation passes.
+
+If validation fails, fix the issue on `next`, bump to the next rc version, publish it to npm `next`, and repeat Task 6. Do not unpublish failed rc versions; npm versions are immutable.
+
+### Task 7: Promote to Stable `v0.2.1`
 
 **Files:**
 - Modify: `package.json`
@@ -252,7 +279,7 @@ git add package.json package-lock.json src/index.ts src/mcp/server.ts CHANGELOG.
 git commit -m "chore: prepare 0.2.1"
 ```
 
-- [ ] Push `next`, fast-forward `main`, and push `main`:
+- [ ] Push `next`, fast-forward `main`, and push `main` only after Task 6 passes:
 
 ```powershell
 git push origin next
@@ -282,7 +309,7 @@ Expected stable version:
 0.2.1
 ```
 
-### Task 7: Final Checks
+### Task 8: Final Checks
 
 **Files:**
 - No new source files.

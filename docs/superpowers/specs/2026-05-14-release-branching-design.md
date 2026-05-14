@@ -4,14 +4,14 @@
 
 Make releases safer without losing npm Trusted Publishing automation.
 
-Maintainers should work on a test branch by default, validate prereleases from that branch, and publish stable versions only from the release branch.
+Maintainers should work on a test branch by default, validate prereleases from that branch in the real local Codex environment, and publish stable versions only from the release branch.
 
 ## Branch Model
 
 - `next`: maintainer working branch and prerelease branch.
 - `main`: stable release branch.
 
-Normal development happens on `next`. `main` should only receive changes after they have passed CI and prerelease validation on `next`.
+Normal development happens on `next`. `main` should only receive changes after they have passed CI, npm prerelease publication, and local Codex validation of the prerelease package.
 
 ## Version Model
 
@@ -21,6 +21,8 @@ npm versions are immutable, so prerelease validation must not consume a stable v
 - `main` release tags use stable semver versions, for example `v0.2.1`.
 
 Prereleases publish to the npm `next` dist-tag. Stable releases publish to the npm `latest` dist-tag.
+
+Promotion to a stable version requires testing the exact prerelease package in the maintainer's local Codex setup after restarting Codex.
 
 ## Workflow Behavior
 
@@ -78,8 +80,9 @@ Next steps after implementing this design:
 1. Create `next` from the current repository state.
 2. Update workflows on `next`.
 3. Publish and validate `v0.2.1-rc.0` from `next`.
-4. If prerelease validation succeeds, merge `next` into `main`.
-5. Publish `v0.2.1` from `main`.
+4. Install the rc package locally, run `codex-cc-reviewer install`, run `codex-cc-reviewer doctor`, restart Codex, and run a real `cc_review` smoke test from Codex.
+5. If local Codex rc validation succeeds, merge `next` into `main`.
+6. Publish `v0.2.1` from `main`.
 
 ## Verification
 
@@ -89,6 +92,14 @@ For prereleases:
 - Release workflow publishes to npm `next`.
 - `npm view codex-cc-reviewer dist-tags` shows the prerelease under `next`.
 - `npx -y codex-cc-reviewer@next --version` reports the prerelease version.
+- The maintainer installs the rc package locally.
+- `codex-cc-reviewer install` and `codex-cc-reviewer doctor` pass locally.
+- Codex is restarted and can call `cc_review` successfully against this repository.
+- The `cc_review` call returns without MCP transport errors.
+- The final result contains a non-empty review and captured details such as activity, transcript, cache, diagnostics, or cost fields when Claude Code reports them.
+- The review refers to repository evidence, files, or commands rather than only confirming connectivity.
+
+If local rc validation fails, fix the issue on `next`, bump to the next rc version, publish it to npm `next`, and repeat prerelease validation. Do not unpublish failed rc versions; npm versions are immutable.
 
 For stable releases:
 

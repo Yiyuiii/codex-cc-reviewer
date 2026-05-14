@@ -18,6 +18,7 @@
     "dist",
     "prompts",
     "examples",
+    "AGENTS.md",
     "docs/installation.md",
     "docs/manual-setup.md",
     "docs/codex-usage.md",

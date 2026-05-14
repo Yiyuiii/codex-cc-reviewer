@@ -303,6 +303,7 @@ See [docs/prior-art.md](docs/prior-art.md) for related work and scope boundaries
 
 ## Documentation
 
+- [Repository agent instructions](AGENTS.md): maintenance workflow, review gates, and release promotion rules.
 - [Installation](docs/installation.md): install commands and requirements.
 - [Manual setup](docs/manual-setup.md): Codex MCP config snippet.
 - [Codex usage](docs/codex-usage.md): when to call `cc_review` and how to synthesize feedback.

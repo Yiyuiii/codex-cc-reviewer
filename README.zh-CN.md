@@ -305,6 +305,7 @@ codex-cc-reviewer doctor
 
 ## 文档
 
+- [仓库 agent 指令](AGENTS.md)：维护流程、审查门槛和发布提升规则。
 - [安装](docs/installation.md)：安装命令和前置要求。
 - [手动配置](docs/manual-setup.md)：Codex MCP 配置片段。
 - [Codex 用法](docs/codex-usage.md)：何时调用 `cc_review`，以及如何综合反馈。
