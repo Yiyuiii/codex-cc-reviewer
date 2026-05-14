@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.2
+
+- Promote `install --package-spec <spec>` after validating `0.2.2-rc.0` in a restarted local Codex session.
+- Support configuring Codex to load prerelease MCP packages such as `codex-cc-reviewer@next`.
+- Show non-default configured MCP package specs in `doctor` output.
+
 ## 0.2.2-rc.0
 
 - Add `install --package-spec <spec>` so prerelease validation can point Codex at `codex-cc-reviewer@next`.
