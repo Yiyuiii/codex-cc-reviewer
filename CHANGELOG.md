@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.1-rc.0
+
+- Add raw fallback evidence for non-empty git diffs that cannot be parsed into per-file `diff --git` blocks, preventing silent loss of review evidence.
+- Add packet diagnostics for non-empty unparseable git diffs and partially dropped diff blocks without echoing raw diff content into diagnostics.
+- Render unparseable diff fallback evidence as text and escape manifest change-summary cells consistently.
+- Fix security and README docs drift around `0.3.x` status and diff-oriented git evidence defaults.
+- Require local Codex `review_diff` smoke coverage for future releases whose headline behavior changes diff routing or packet evidence.
+
 ## 0.3.0
 
 - Promote Review Evidence Routing after validating `v0.3.0-rc.0` in a restarted local Codex session.

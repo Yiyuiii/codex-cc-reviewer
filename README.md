@@ -13,7 +13,7 @@ Use Claude Code as a second-opinion reviewer for Codex via MCP.
 
 `codex-cc-reviewer` exposes one MCP tool, `cc_review`. Codex stays the orchestrator and final decision-maker; Claude Code runs locally as a focused reviewer for plans, diffs, risky design choices, and security-sensitive changes.
 
-Status: early `0.2.x`. The core workflow is usable, but the project is still pre-1.0 and intentionally narrow.
+Status: early pre-1.0. The core workflow is usable, but the project is still intentionally narrow.
 
 > **⚠️ WARNING:** The default install is for trusted local repositories. It configures Claude Code with `permissionMode: "bypassPermissions"` and invokes it with `--dangerously-skip-permissions`. Do not use the default configuration directly in untrusted repositories, shared machines, or sensitive codebases. See [Safety And Configuration](#safety-and-configuration) for safer settings.
 

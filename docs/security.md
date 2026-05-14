@@ -12,8 +12,9 @@ Default posture:
 - stream-json activity capture enabled
 - MCP progress notifications enabled when the client provides `progressToken`
 - 1-hour prompt cache TTL hint enabled
-- no git status or diff unless requested
-- diff-oriented reviews embed selected untracked text file bodies by default when git auto-discovery is enabled; set `includeUntrackedContent=false` to list paths only
+- `review_diff` and `adversarial_review` auto-discover git status, git diff, and selected untracked text file bodies by default
+- `review_plan` and `review_doc` include only a lightweight git summary by default; set `autoDiscoverGit`, `includeGitDiff`, `includeGitStatus`, or `includeUntrackedContent` explicitly to override task defaults
+- non-empty git diff output that cannot be parsed into `diff --git` blocks is embedded as `[unparsed-diff]` raw fallback evidence; `redactSecrets=true` is applied before embedding
 - review packet content is sent as provided by default
 - `redactSecrets=true` enables best-effort redaction, but it may remove useful evidence and is not comprehensive
 

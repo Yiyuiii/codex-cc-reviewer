@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { routeDiffForReview } from "../src/review/context-router.js";
+import {
+  routeDiffForReview,
+  routeRawDiffFallbackForReview
+} from "../src/review/context-router.js";
 import { parseUnifiedDiff, type ParsedDiffFile } from "../src/review/diff-parser.js";
 
 describe("routeDiffForReview", () => {
@@ -202,6 +205,56 @@ describe("routeDiffForReview", () => {
       "src/bravo.ts",
       "src/alpha.ts"
     ]);
+  });
+});
+
+describe("routeRawDiffFallbackForReview", () => {
+  it("embeds unparseable raw diff evidence using the routed diff markdown shape", () => {
+    const routed = routeRawDiffFallbackForReview(
+      "mailbox-style diff\n+important fallback evidence\n",
+      { totalBudgetChars: 400 }
+    );
+
+    expect(routed.manifestRows[0]).toMatchObject({
+      path: "[unparsed-diff]",
+      status: "unknown",
+      inclusion: "full",
+      addedLines: 0,
+      deletedLines: 0,
+      changeSummary: "n/a",
+      reason: "risk: unparseable; diff_parse_failed; raw_fallback"
+    });
+    expect(routed.sections[0]).toMatchObject({
+      path: "[unparsed-diff]",
+      inclusion: "full",
+      reason: "risk: unparseable; diff_parse_failed; raw_fallback"
+    });
+    expect(routed.markdown).toContain("## Changed Files Manifest");
+    expect(routed.markdown).toContain("## Context Routing Guidance");
+    expect(routed.markdown).toContain("## Routed Git Diff Evidence");
+    expect(routed.markdown).toContain("| [unparsed-diff] | unknown | full | n/a | risk: unparseable; diff_parse_failed; raw_fallback |");
+    expect(routed.markdown).toContain("```text");
+    expect(routed.markdown).toContain("+important fallback evidence");
+  });
+
+  it("marks raw fallback evidence partial when it must be truncated", () => {
+    const routed = routeRawDiffFallbackForReview(
+      `HEAD-IMPORTANT\n${"middle\n".repeat(80)}TAIL-IMPORTANT\n`,
+      { totalBudgetChars: 180 }
+    );
+
+    expect(routed.manifestRows[0]).toMatchObject({
+      path: "[unparsed-diff]",
+      inclusion: "partial",
+      reason: "risk: unparseable; diff_parse_failed; raw_fallback"
+    });
+    expect(routed.sections[0]).toMatchObject({
+      path: "[unparsed-diff]",
+      inclusion: "partial"
+    });
+    expect(routed.markdown).toContain("HEAD-IMPORTANT");
+    expect(routed.markdown).toContain("TAIL-IMPORTANT");
+    expect(routed.markdown).toContain("[TRUNCATED");
   });
 });
 

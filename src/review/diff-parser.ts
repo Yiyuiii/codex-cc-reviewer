@@ -29,6 +29,15 @@ export function parseUnifiedDiff(diff: string): ParsedDiffFile[] {
     .filter((file): file is ParsedDiffFile => file !== undefined);
 }
 
+export function countUnifiedDiffBlocks(diff: string): number {
+  const normalized = diff.replace(/\r\n/g, "\n").trimEnd();
+  if (!normalized.trim()) {
+    return 0;
+  }
+
+  return splitDiffBlocks(normalized).length;
+}
+
 function splitDiffBlocks(diff: string): string[] {
   const starts = [...diff.matchAll(/^diff --git /gm)].map((match) => match.index ?? 0);
   if (!starts.length) {

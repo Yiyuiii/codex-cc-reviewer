@@ -13,7 +13,7 @@
 
 `codex-cc-reviewer` 只暴露一个 MCP 工具：`cc_review`。Codex 仍然负责调度和最终决策；Claude Code 在本地作为聚焦的审查者，检查计划、diff、高风险设计选择和安全敏感变更。
 
-状态：早期 `0.2.x`。核心流程可用，但项目仍是 pre-1.0，并且会刻意保持很窄。
+状态：早期 pre-1.0。核心流程可用，但项目仍会刻意保持很窄。
 
 > **⚠️ 警告：** 默认安装面向可信本地仓库。它会用 `permissionMode: "bypassPermissions"` 配置 Claude Code，并通过 `--dangerously-skip-permissions` 调用它。不要在不可信仓库、共享机器或敏感代码库中直接使用默认配置。更保守的设置见[安全与配置](#安全与配置)。
 
@@ -93,6 +93,7 @@ flowchart TD
 
 最近稳定版重点：
 
+- `v0.3.0`：加入 Review Evidence Routing，按风险优先路由 tracked diff，默认为 diff 审查包含精选 untracked 文本正文，支持 `includeUntrackedContent`，并提供不启动 Claude Code 的 `preview` CLI。继续将 `claude -p` 作为受支持的审查后端。
 - `v0.2.3`：强化发布保障，加入标准预检、CI/package smoke checks、npm publish 验证，以及最终 `cc_review` 所需证据字段说明。
 - `v0.2.2`：支持 `install --package-spec <spec>`，用于 `@next` 预发布验证，并让 `doctor` 更清楚地显示已配置的 package spec。
 - `v0.2.1`：加入分支感知的发布流程，使用 npm Trusted Publishing provenance，并验证 `next` 预发布通道。

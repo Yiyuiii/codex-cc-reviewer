@@ -15,6 +15,7 @@ export interface RoutedDiffManifestRow {
   inclusion: DiffInclusion;
   addedLines: number;
   deletedLines: number;
+  changeSummary?: string;
   reason: string;
 }
 
@@ -23,6 +24,7 @@ export interface RoutedDiffSection {
   inclusion: Exclude<DiffInclusion, "omitted">;
   reason: string;
   content: string;
+  language?: string;
   omittedChars?: number;
 }
 
@@ -37,6 +39,7 @@ const DEFAULT_FULL_FILE_MAX_CHARS = 12_000;
 const DEFAULT_MAX_MANIFEST_ROWS = 200;
 const MIN_PARTIAL_CHARS = 120;
 const GENERATED_RANK = 70;
+const RAW_DIFF_FALLBACK_PATH = "[unparsed-diff]";
 
 interface ClassifiedDiffFile {
   file: ParsedDiffFile;
@@ -83,6 +86,45 @@ export function routeDiffForReview(
       remainingBudget = Math.max(0, remainingBudget - routed.section.content.length);
     }
   }
+
+  return {
+    manifestRows,
+    sections,
+    markdown: formatRoutedDiffMarkdown(manifestRows, sections, maxManifestRows)
+  };
+}
+
+export function routeRawDiffFallbackForReview(
+  rawDiff: string,
+  options: RouteDiffOptions = {}
+): RoutedDiff {
+  const totalBudgetChars = options.totalBudgetChars ?? DEFAULT_TOTAL_BUDGET_CHARS;
+  const maxManifestRows = options.maxManifestRows ?? DEFAULT_MAX_MANIFEST_ROWS;
+  const content = truncateMiddle(rawDiff, Math.max(0, totalBudgetChars));
+  const inclusion: Exclude<DiffInclusion, "omitted"> =
+    rawDiff.length > Math.max(0, totalBudgetChars) ? "partial" : "full";
+  const reason = "risk: unparseable; diff_parse_failed; raw_fallback";
+  const manifestRows: RoutedDiffManifestRow[] = [
+    {
+      path: RAW_DIFF_FALLBACK_PATH,
+      status: "unknown",
+      inclusion,
+      addedLines: 0,
+      deletedLines: 0,
+      changeSummary: "n/a",
+      reason
+    }
+  ];
+  const sections: RoutedDiffSection[] = [
+    {
+      path: RAW_DIFF_FALLBACK_PATH,
+      inclusion,
+      reason,
+      content,
+      language: "text",
+      omittedChars: inclusion === "partial" ? Math.max(0, rawDiff.length - content.length) : undefined
+    }
+  ];
 
   return {
     manifestRows,
@@ -326,7 +368,7 @@ function formatManifestRow(row: RoutedDiffManifestRow): string {
     escapeTableCell(row.path),
     escapeTableCell(row.status),
     escapeTableCell(row.inclusion),
-    `+${row.addedLines}/-${row.deletedLines}`,
+    escapeTableCell(row.changeSummary ?? `+${row.addedLines}/-${row.deletedLines}`),
     escapeTableCell(row.reason),
     ""
   ].join(" | ");
@@ -334,6 +376,7 @@ function formatManifestRow(row: RoutedDiffManifestRow): string {
 
 function formatSection(section: RoutedDiffSection): string {
   const fence = markdownFenceFor(section.content);
+  const language = section.language ?? "diff";
   return [
     `### ${section.path}`,
     "",
@@ -341,7 +384,7 @@ function formatSection(section: RoutedDiffSection): string {
     `Reason: ${section.reason}`,
     section.omittedChars ? `Omitted chars: ${section.omittedChars}` : undefined,
     "",
-    `${fence}diff`,
+    `${fence}${language}`,
     section.content,
     fence
   ]

@@ -129,6 +129,130 @@ describe("buildReviewPacket", () => {
     expect(packet).not.toContain("```diff\n-old\n+new");
   });
 
+  it("embeds raw fallback evidence when a non-empty diff cannot be parsed", async () => {
+    const packet = await buildReviewPacket(
+      {
+        ...baseInput,
+        includeGitDiff: true,
+        redactSecrets: false
+      },
+      {
+        getGitSummary: async () => "Summary",
+        getGitDiff: async () => [
+          "mailbox-style diff without git headers",
+          "+important fallback evidence"
+        ].join("\n")
+      }
+    );
+
+    expect(packet).toContain("## Changed Files Manifest");
+    expect(packet).toContain("| [unparsed-diff] | unknown | full | n/a | risk: unparseable; diff_parse_failed; raw_fallback |");
+    expect(packet).toContain("## Routed Git Diff Evidence");
+    expect(packet).toContain("### [unparsed-diff]");
+    expect(packet).toContain("Inclusion: full");
+    expect(packet).toContain("Reason: risk: unparseable; diff_parse_failed; raw_fallback");
+    expect(packet).toContain("+important fallback evidence");
+    expect(packet).toContain("## Packet Diagnostics");
+    expect(packet).toContain("git diff was non-empty but no files were parsed; embedded raw diff fallback evidence.");
+  });
+
+  it("embeds raw fallback evidence when malformed diff headers produce no parsed files", async () => {
+    const packet = await buildReviewPacket(
+      {
+        ...baseInput,
+        includeGitDiff: true,
+        redactSecrets: false
+      },
+      {
+        getGitSummary: async () => "Summary",
+        getGitDiff: async () => [
+          "diff --git foo bar",
+          "index 1111111..2222222 100644",
+          "-old",
+          "+new"
+        ].join("\n")
+      }
+    );
+
+    expect(packet).toContain("| [unparsed-diff] | unknown | full | n/a | risk: unparseable; diff_parse_failed; raw_fallback |");
+    expect(packet).toContain("diff --git foo bar");
+    expect(packet).toContain("+new");
+    expect(packet).toContain(
+      "git diff was non-empty but no files were parsed; parser observed 1 diff --git block(s), all dropped; embedded raw diff fallback evidence."
+    );
+  });
+
+  it("adds diagnostics when some diff blocks are dropped by parsing", async () => {
+    const packet = await buildReviewPacket(
+      {
+        ...baseInput,
+        includeGitDiff: true,
+        redactSecrets: false
+      },
+      {
+        getGitSummary: async () => "Summary",
+        getGitDiff: async () => [
+          "diff --git a/src/good.ts b/src/good.ts",
+          "index 1111111..2222222 100644",
+          "--- a/src/good.ts",
+          "+++ b/src/good.ts",
+          "@@ -1 +1 @@",
+          "-old",
+          "+new",
+          "diff --git malformed header",
+          "index 3333333..4444444 100644",
+          "-hidden",
+          "+hidden"
+        ].join("\n")
+      }
+    );
+
+    expect(packet).toContain("| src/good.ts | modified | full | +1/-1 | risk: source; source diff within budget |");
+    expect(packet).not.toContain("raw_fallback");
+    expect(packet).toContain("## Packet Diagnostics");
+    expect(packet).toContain("git diff parser dropped 1 of 2 diff blocks; raw diff evidence may be incomplete.");
+  });
+
+  it("redacts raw fallback evidence before embedding it", async () => {
+    const packet = await buildReviewPacket(
+      {
+        ...baseInput,
+        includeGitDiff: true,
+        redactSecrets: true
+      },
+      {
+        getGitSummary: async () => "Summary",
+        getGitDiff: async () => [
+          "not a unified diff",
+          "API_KEY=sk-test1234567890"
+        ].join("\n")
+      }
+    );
+
+    expect(packet).toContain("API_KEY=[REDACTED]");
+    expect(packet).not.toContain("sk-test1234567890");
+    expect(packet).toContain("git diff was non-empty but no files were parsed; embedded raw diff fallback evidence.");
+  });
+
+  it("does not trigger raw fallback for empty git diff evidence", async () => {
+    const packet = await buildReviewPacket(
+      {
+        ...baseInput,
+        includeGitDiff: true
+      },
+      {
+        getGitSummary: async () => "Summary",
+        getGitDiff: async () => ""
+      }
+    );
+
+    expect(packet).toContain("## Changed Files Manifest");
+    expect(packet).toContain("No changed files were parsed from the git diff.");
+    expect(packet).not.toContain("[unparsed-diff]");
+    expect(packet).not.toContain("raw_fallback");
+    expect(packet).not.toContain("git diff was non-empty but no files were parsed");
+  });
+
   it("auto-discovers git evidence for review_diff by default", async () => {
     const packet = await buildReviewPacket(
       {

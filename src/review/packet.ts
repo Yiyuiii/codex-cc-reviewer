@@ -6,8 +6,8 @@ import {
   type UntrackedFileEvidence
 } from "../git/untracked.js";
 import { truncateMiddle } from "../utils/truncate.js";
-import { routeDiffForReview } from "./context-router.js";
-import { parseUnifiedDiff } from "./diff-parser.js";
+import { routeDiffForReview, routeRawDiffFallbackForReview } from "./context-router.js";
+import { countUnifiedDiffBlocks, parseUnifiedDiff } from "./diff-parser.js";
 import { REVIEWER_PROMPT } from "./prompts.js";
 import type { CcReviewInput } from "./schema.js";
 import { routeUntrackedForReview } from "./untracked-router.js";
@@ -141,6 +141,12 @@ function prepareVariableBlocks(
 ): VariableBlocks {
   const variableBudget = Math.max(300, input.maxContextChars - 500);
   const hasUntrackedEvidence = rawUntrackedFiles !== undefined && rawUntrackedFiles.length > 0;
+  const gitDiffAnalysis =
+    rawGitDiff !== undefined ? analyzeGitDiff(rawGitDiff, input.redactSecrets) : undefined;
+  const packetDiagnostics = [...diagnostics];
+  const hasDiagnostics =
+    diagnostics.length > 0 || (gitDiffAnalysis?.diagnostics.length ?? 0) > 0;
+  const diagnosticsWeight = hasDiagnostics ? 0.03 : 0;
   const blocks: Array<{
     key: keyof VariableBlocks;
     value: string | undefined;
@@ -180,25 +186,27 @@ function prepareVariableBlocks(
     { key: "context", value: input.context, weight: 0.45 },
     { key: "gitSummary", value: rawGitSummary, weight: rawGitSummary !== undefined ? 0.08 : 0 },
     { key: "gitStatus", value: rawGitStatus, weight: rawGitStatus !== undefined ? 0.1 : 0 },
-    { key: "gitDiff", value: rawGitDiff, weight: rawGitDiff !== undefined ? 0.3 : 0, kind: "gitDiff" },
-    {
-      key: "diagnostics",
-      value: diagnostics.length ? formatList(diagnostics) : undefined,
-      weight: diagnostics.length ? 0.03 : 0
-    }
+    { key: "gitDiff", value: rawGitDiff, weight: rawGitDiff !== undefined ? 0.3 : 0, kind: "gitDiff" }
   ];
   const untrackedWeight = hasUntrackedEvidence ? 0.18 : 0;
-  const totalWeight = blocks.reduce((sum, block) => sum + block.weight, untrackedWeight);
+  const totalWeight = blocks.reduce(
+    (sum, block) => sum + block.weight,
+    untrackedWeight + diagnosticsWeight
+  );
   const prepared: Partial<VariableBlocks> = {};
 
   for (const block of blocks) {
     if (block.value === undefined) continue;
 
     const blockBudget = Math.max(100, Math.floor((variableBudget * block.weight) / totalWeight));
-    prepared[block.key] =
-      block.kind === "gitDiff"
-        ? prepareGitDiffBlock(block.value, blockBudget, input.redactSecrets)
-        : prepareBlock(block.value, blockBudget, input.redactSecrets);
+    if (block.kind === "gitDiff") {
+      if (gitDiffAnalysis === undefined) continue;
+      const preparedDiff = prepareGitDiffBlock(gitDiffAnalysis, blockBudget);
+      prepared[block.key] = preparedDiff.markdown;
+      packetDiagnostics.push(...preparedDiff.diagnostics);
+    } else {
+      prepared[block.key] = prepareBlock(block.value, blockBudget, input.redactSecrets);
+    }
   }
 
   if (hasUntrackedEvidence) {
@@ -222,7 +230,13 @@ function prepareVariableBlocks(
     gitStatus: prepared.gitStatus,
     gitDiff: prepared.gitDiff,
     untrackedEvidence: prepared.untrackedEvidence,
-    diagnostics: diagnostics.length ? prepared.diagnostics : undefined
+    diagnostics: packetDiagnostics.length
+      ? prepareBlock(
+          formatList(packetDiagnostics),
+          Math.max(100, Math.floor((variableBudget * diagnosticsWeight) / totalWeight)),
+          input.redactSecrets
+        )
+      : undefined
   };
 }
 
@@ -231,11 +245,65 @@ function prepareBlock(value: string, maxChars: number, shouldRedact: boolean): s
   return truncateMiddle(redacted, maxChars);
 }
 
-function prepareGitDiffBlock(value: string, maxChars: number, shouldRedact: boolean): string {
+function prepareGitDiffBlock(
+  analysis: GitDiffAnalysis,
+  maxChars: number
+): { markdown: string; diagnostics: string[] } {
+  if (analysis.fallback) {
+    return {
+      markdown: routeRawDiffFallbackForReview(analysis.redacted, { totalBudgetChars: maxChars }).markdown,
+      diagnostics: analysis.diagnostics
+    };
+  }
+
+  return {
+    markdown: routeDiffForReview(analysis.parsed, { totalBudgetChars: maxChars }).markdown,
+    diagnostics: analysis.diagnostics
+  };
+}
+
+interface GitDiffAnalysis {
+  redacted: string;
+  parsed: ReturnType<typeof parseUnifiedDiff>;
+  diagnostics: string[];
+  fallback: boolean;
+}
+
+function analyzeGitDiff(value: string, shouldRedact: boolean): GitDiffAnalysis {
   const redacted = shouldRedact ? redactSecrets(value) : value;
   const parsed = parseUnifiedDiff(redacted);
+  const diffBlockCount = countUnifiedDiffBlocks(redacted);
 
-  return routeDiffForReview(parsed, { totalBudgetChars: maxChars }).markdown;
+  if (redacted.trim() && parsed.length === 0) {
+    return {
+      redacted,
+      parsed,
+      diagnostics: [formatRawFallbackDiagnostic(diffBlockCount)],
+      fallback: true
+    };
+  }
+
+  const diagnostics: string[] = [];
+  if (diffBlockCount > parsed.length) {
+    diagnostics.push(
+      `git diff parser dropped ${diffBlockCount - parsed.length} of ${diffBlockCount} diff blocks; raw diff evidence may be incomplete.`
+    );
+  }
+
+  return {
+    redacted,
+    parsed,
+    diagnostics,
+    fallback: false
+  };
+}
+
+function formatRawFallbackDiagnostic(diffBlockCount: number): string {
+  if (diffBlockCount > 0) {
+    return `git diff was non-empty but no files were parsed; parser observed ${diffBlockCount} diff --git block(s), all dropped; embedded raw diff fallback evidence.`;
+  }
+
+  return "git diff was non-empty but no files were parsed; embedded raw diff fallback evidence.";
 }
 
 function prepareUntrackedBlock(

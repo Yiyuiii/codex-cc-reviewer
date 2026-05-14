@@ -11,6 +11,18 @@ This file is for maintainers and agents working on this repository. It is not th
 - Do not push unvalidated changes directly to `main`.
 - Do not move published version tags.
 
+## Release Publication Source Of Truth
+
+- Do not publish npm packages from a local shell. Local `npm publish --dry-run` and `npm pack --dry-run --json` are verification only.
+- Real npm publication is performed by `.github/workflows/release.yml` through npm Trusted Publishing/OIDC when a `v*` git tag is pushed.
+- Prerelease tags such as `vX.Y.Z-rc.N` must point to commits reachable from `origin/next`; the release workflow publishes them to the npm `next` dist-tag.
+- Stable tags such as `vX.Y.Z` must point to commits reachable from `origin/main`; the release workflow publishes them to the npm `latest` dist-tag and requires the stable validation file.
+- Missing local npm authentication, such as `npm whoami` returning 401, is not a release blocker for this repository. Verify publication with `npm view` after the GitHub release workflow completes.
+
+## Instruction and Memory Maintenance
+
+- Keep this `AGENTS.md` and related durable project memory up to date as workflows, release gates, validated findings, or maintainer expectations change. Record durable rules promptly in the appropriate repository document instead of relying on chat history.
+
 ## Codex + Claude Review Workflow
 
 For complex changes, use the convergence workflow:
@@ -50,14 +62,14 @@ Prerelease packages must be validated in the maintainer's real Codex environment
 
 The release flow is:
 
-1. Publish an rc version from `next` to npm `next`.
+1. Prepare the rc version on `next`, commit it, push `next`, create a prerelease tag such as `vX.Y.Z-rc.N`, and push the tag. The GitHub release workflow publishes that tag to npm `next`.
    Version prep must keep `package.json`, `package-lock.json`, `src/index.ts`, and `src/mcp/server.ts` aligned. The release workflow verifies the CLI version, but the MCP server version should be updated in the same prep commit.
 2. Install that exact rc or `@next` locally.
 3. Run `npx --prefer-online -y codex-cc-reviewer@next install --package-spec codex-cc-reviewer@next` and `npx --prefer-online -y codex-cc-reviewer@next doctor`.
 4. Restart Codex.
 5. From Codex, run a real `cc_review` smoke test against this repository.
 6. Commit `.release-validation/vX.Y.Z.md` on the stable promotion commit.
-7. Promote to `main` only after the local Codex smoke test passes.
+7. Promote to `main` only after the local Codex smoke test passes, then create and push the stable tag from `main`. The GitHub release workflow publishes that tag to npm `latest`.
 
 The stable validation file must include these exact marker lines so the release workflow can verify the gate:
 
@@ -78,11 +90,13 @@ The local Codex smoke test passes only when:
 - The final result contains a non-empty review plus captured detail such as activity, transcript, cache, diagnostics, or cost fields when Claude Code reports them.
 - The review refers to repository evidence, files, or commands rather than only confirming connectivity.
 
-If validation fails, fix the issue on `next`, bump to the next rc version, publish it to npm `next`, and repeat the local Codex validation. Do not unpublish failed rc versions; npm versions are immutable.
+When a release's headline behavior changes diff routing or packet evidence, the local Codex smoke test must include a real `review_diff` run against this repository after restart. The validation file should show that the smoke exercised a real tracked diff and, when relevant to the release, selected untracked evidence. This is a maintainer-side gate; do not move live Claude Code authentication into CI.
+
+If validation fails, fix the issue on `next`, bump to the next rc version, push `next`, push the next rc tag, let GitHub publish it to npm `next`, and repeat the local Codex validation. Do not unpublish failed rc versions; npm versions are immutable.
 
 Do not treat npm publication alone as sufficient release validation.
 
-If npm publish succeeds but GitHub Release creation fails, do not re-run the tag workflow by republishing the same npm version. Create or repair the GitHub Release manually, then fix the workflow on `next` before the next release.
+If the GitHub release workflow publishes npm successfully but GitHub Release creation fails, do not re-run the tag workflow by republishing the same npm version. Create or repair the GitHub Release manually, then fix the workflow on `next` before the next release.
 
 ## Safety
 
