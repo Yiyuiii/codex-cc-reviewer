@@ -16,6 +16,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-node@v6
         with:
@@ -23,9 +25,42 @@ jobs:
           registry-url: https://registry.npmjs.org
           package-manager-cache: false
 
+      - name: Require tag trigger
+        if: github.ref_type != 'tag'
+        shell: bash
+        run: |
+          echo "::error::This workflow must be triggered by a tag push"
+          exit 1
+
+      - name: Resolve release channel
+        id: channel
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          if [[ "$tag" == *-* ]]; then
+            echo "npm_tag=next" >> "$GITHUB_OUTPUT"
+            echo "required_branch=origin/next" >> "$GITHUB_OUTPUT"
+          else
+            echo "npm_tag=latest" >> "$GITHUB_OUTPUT"
+            echo "required_branch=origin/main" >> "$GITHUB_OUTPUT"
+          fi
+
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
-      - run: npm publish --access public
 
+      - name: Verify tag ancestry
+        shell: bash
+        run: |
+          set -euo pipefail
+          required_branch="${{ steps.channel.outputs.required_branch }}"
+          branch_name="${required_branch#origin/}"
+          git fetch origin "+refs/heads/${branch_name}:refs/remotes/origin/${branch_name}"
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" "$required_branch"; then
+            echo "::error::Tag $GITHUB_REF_NAME at $GITHUB_SHA is not reachable from $required_branch"
+            exit 1
+          fi
+
+      - run: npm publish --provenance --tag "${{ steps.channel.outputs.npm_tag }}" --access public
