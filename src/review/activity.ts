@@ -1,4 +1,5 @@
 import { parseCacheUsage } from "./cache.js";
+import type { CacheUsage } from "./cache.js";
 
 export type CcReviewActivityKind =
   | "system"
@@ -32,10 +33,7 @@ export interface ParsedClaudeActivity {
   transcriptTail: string[];
   activityTail: CcReviewActivityEvent[];
   eventCount: number;
-  cache?: {
-    creationInputTokens?: number;
-    readInputTokens?: number;
-  };
+  cache?: Omit<CacheUsage, "effective">;
   costUsd?: number;
   diagnostics: string[];
 }

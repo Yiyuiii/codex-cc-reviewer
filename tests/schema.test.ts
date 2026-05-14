@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { CcReviewInputSchema } from "../src/review/schema.js";
+import { CcReviewInputSchema, CcReviewOutputSchema } from "../src/review/schema.js";
 
 describe("CcReviewInputSchema", () => {
   it("applies deep autonomous defaults for a minimal review request", () => {
@@ -111,5 +111,39 @@ describe("CcReviewInputSchema", () => {
     expect(parsed.acceptanceCriteria).toBeUndefined();
     expect(parsed.knownRisks).toBeUndefined();
     expect(parsed.testsRun).toBeUndefined();
+  });
+});
+
+describe("CcReviewOutputSchema", () => {
+  it("accepts optional expanded cache usage fields", () => {
+    const parsed = CcReviewOutputSchema.parse({
+      ok: true,
+      task: "review_diff",
+      model: "opus",
+      elapsedMs: 10,
+      review: "No findings.",
+      command: ["claude"],
+      cache: {
+        inputTokens: 7,
+        creationInputTokens: 11,
+        readInputTokens: 13,
+        cacheCreation: {
+          ephemeral1hInputTokens: 17,
+          ephemeral5mInputTokens: 19
+        },
+        effective: "hit"
+      }
+    });
+
+    expect(parsed.cache).toEqual({
+      inputTokens: 7,
+      creationInputTokens: 11,
+      readInputTokens: 13,
+      cacheCreation: {
+        ephemeral1hInputTokens: 17,
+        ephemeral5mInputTokens: 19
+      },
+      effective: "hit"
+    });
   });
 });

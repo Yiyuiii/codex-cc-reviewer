@@ -21,4 +21,6 @@ Common issues:
 - Redaction did not remove a value: `redactSecrets` is best-effort pattern redaction, not a security boundary. It handles common key/token/password and uppercase environment-style assignments, but users should still avoid sending sensitive repositories to the default trusted-local profile.
 - Codex only shows one tool call while Claude Code is running: real-time progress requires the Codex MCP client to send `_meta.progressToken`. If it does not, check the final `diagnostics` and `activityTail` fields instead.
 - Cache reads stay at zero: the first run may be a cold cache write, Claude Code may not have reported usage, or the prompt may be below the model's minimum cacheable length.
+- Cache fields look contradictory: `cache.inputTokens` is residual uncached input, not total input. `cache.effective: "disabled"` only means the 1-hour cache hint was disabled; `cache.cacheCreation.ephemeral5mInputTokens` can still show 5-minute cache activity.
+- Repeated reviews are still expensive: packet reorder is not implemented as a cost optimization. Maintainers can investigate Claude Code print-mode cache behavior with `npm run research:cache-repeat -- --runs 2`; generate real packet input with `codex-cc-reviewer preview --task review_diff --context "Cache experiment" > packet.md` and pass it using `--packet-file packet.md`.
 

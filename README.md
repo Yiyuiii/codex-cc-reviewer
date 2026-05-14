@@ -279,8 +279,12 @@ Shortened example:
   "transcriptTail": ["Claude inspected the diff and focused on correctness."],
   "eventCount": 128,
   "cache": {
+    "inputTokens": 42,
     "creationInputTokens": 1234,
     "readInputTokens": 5678,
+    "cacheCreation": {
+      "ephemeral1hInputTokens": 1234
+    },
     "effective": "hit"
   },
   "diagnostics": ["MCP progress unavailable: request did not include _meta.progressToken."],
@@ -309,6 +313,7 @@ Common issues:
 - `doctor` warns about Claude Code daemon or blocked background jobs: run `claude agents` and stop stale sessions with `claude stop <id>` before debugging review failures.
 - Codex only shows one tool call while Claude Code is running: real-time progress requires the Codex MCP client to send `_meta.progressToken`. If it does not, check the final `diagnostics` and `activityTail` fields instead.
 - Cache reads stay at zero: the first run may be a cold cache write, Claude Code may not have reported usage, or the prompt may be below the model's minimum cacheable length.
+- `cache.inputTokens` is Claude Code's reported residual uncached input tokens, not total input tokens. `cache.effective: "disabled"` means the 1-hour cache hint was disabled; 5-minute cache activity can still appear in `cache.cacheCreation`.
 
 See [docs/troubleshooting.md](docs/troubleshooting.md) for the full troubleshooting guide.
 
@@ -321,6 +326,16 @@ Maintainers can run a local A/B smoke after authenticating an isolated Claude pr
 ```bash
 npm run research:bg-ab -- --profile-dir ~/.claude-plan
 ```
+
+Maintainers can also run repeat-call cache research for `claude -p` without changing packet routing:
+
+```bash
+npm run research:cache-repeat -- --runs 2 --stable-location stdin --dynamic-mode suffix
+codex-cc-reviewer preview --task review_diff --context "Cache experiment" > packet.md
+npm run research:cache-repeat -- --packet-file packet.md --dynamic-mode same
+```
+
+The cache-repeat harness sends packet-file content through stdin, never argv, and its JSON summary omits prompt, packet, stdin, and stderr content. It is directional evidence for repeated-call cache behavior, not a byte-equivalent replay of `cc_review`. Packet-file experiment cost scales with packet size times run count; start with a small or medium preview packet before running larger reviews. Packet reorder remains unimplemented until this evidence shows it can materially help repeated-call cost. Real npm publication still happens through `.github/workflows/release.yml` via Trusted Publishing when a version tag is pushed; local npm commands are verification only.
 
 This script is not part of the MCP tool contract and should not be treated as a supported backend.
 

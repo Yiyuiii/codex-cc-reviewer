@@ -58,12 +58,22 @@ Output:
 
 While the tool is running, the server sends MCP `notifications/progress` when the client includes `_meta.progressToken` in the tool call request. Progress values are monotonically increasing event counters and `message` contains a concise Claude Code activity summary. If the client does not provide a progress token, no real-time notification can be sent; the final result includes `diagnostics` explaining that limitation.
 
+`cache` fields are optional and reflect what Claude Code reported in its `usage` object:
+
+- `inputTokens`: Claude Code's reported residual uncached input tokens (`input_tokens`), not total input tokens.
+- `creationInputTokens`: aggregate cache creation tokens (`cache_creation_input_tokens`).
+- `readInputTokens`: cache read tokens (`cache_read_input_tokens`).
+- `cacheCreation.ephemeral1hInputTokens`: 1-hour cache creation tokens when Claude Code reports `cache_creation.ephemeral_1h_input_tokens`.
+- `cacheCreation.ephemeral5mInputTokens`: 5-minute cache creation tokens when Claude Code reports `cache_creation.ephemeral_5m_input_tokens`.
+
 `cache.effective` is derived from Claude Code's reported usage fields:
 
 - `hit`: `cache_read_input_tokens` was greater than zero.
 - `write`: cache creation tokens were reported without read tokens.
 - `miss_or_unreported`: Claude Code did not report cache usage or reported zero cache tokens.
 - `disabled`: the request used `cacheTtl = "5m"` and did not request the 1-hour cache hint.
+
+`disabled` means the 1-hour cache hint was disabled; other reported cache fields can still show 5-minute cache activity.
 
 These diagnostics reflect Claude Code CLI output, not direct Anthropic API state.
 
@@ -106,3 +116,22 @@ codex-cc-reviewer preview --task review_diff --context "Preview packet"
 ```
 
 Review packet blocks use a large context budget by default. Oversized blocks are truncated from the middle with a marker while preserving both the beginning and the end.
+
+## Maintainer Cache Research
+
+Maintainers can run repeat-call cache experiments without invoking Codex:
+
+```bash
+npm run research:cache-repeat -- --runs 2 --stable-location stdin --dynamic-mode suffix
+```
+
+For a real packet experiment, generate a packet with preview and pass it by file:
+
+```bash
+codex-cc-reviewer preview --task review_diff --context "Cache experiment" > packet.md
+npm run research:cache-repeat -- --packet-file packet.md --dynamic-mode same
+```
+
+The research harness sends packet content to Claude Code through stdin, never argv, and its JSON summary omits prompt, packet, stdin, and stderr content. Packet reorder remains unimplemented until this cache ground-truth evidence shows it can help.
+
+The harness is directional evidence, not a byte-equivalent replay of `cc_review`: it uses a controlled `claude -p` invocation to compare repeated-call cache behavior while keeping packet content out of argv and summaries. Packet-file experiment cost scales with packet size times run count; start with a small or medium preview packet before running larger reviews. Treat results as a decision aid before packet-order changes, not as a production review contract.

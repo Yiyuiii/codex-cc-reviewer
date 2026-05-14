@@ -30,7 +30,9 @@ describe("release assurance configuration", () => {
     expect(packageJson.scripts["verify:release"]).toContain("node dist/index.js --version");
     expect(packageJson.scripts["verify:release"]).toContain("node dist/index.js --help");
     expect(packageJson.scripts["research:bg-ab"]).toBe("node scripts/research-bg-ab.mjs");
+    expect(packageJson.scripts["research:cache-repeat"]).toBe("node scripts/research-cache-repeat.mjs");
     expect(packageJson.files).toContain("scripts/research-bg-ab.mjs");
+    expect(packageJson.files).toContain("scripts/research-cache-repeat.mjs");
   });
 
   it("keeps the maintainer bg research harness available to package scripts", async () => {

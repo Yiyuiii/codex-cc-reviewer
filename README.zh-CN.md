@@ -271,8 +271,12 @@ codex-cc-reviewer review --task review_plan --review-focus "审查这个计划" 
   "transcriptTail": ["Claude inspected the diff and focused on correctness."],
   "eventCount": 128,
   "cache": {
+    "inputTokens": 42,
     "creationInputTokens": 1234,
     "readInputTokens": 5678,
+    "cacheCreation": {
+      "ephemeral1hInputTokens": 1234
+    },
     "effective": "hit"
   },
   "diagnostics": ["MCP progress unavailable: request did not include _meta.progressToken."],
@@ -300,8 +304,21 @@ codex-cc-reviewer doctor
 - 审查超时：增加 Codex config 里的 `tool_timeout_sec`。
 - Codex 只显示一次工具调用但 Claude Code 还在运行：实时 progress 需要 Codex MCP client 发送 `_meta.progressToken`。否则请查看最终 `diagnostics` 和 `activityTail` 字段。
 - Cache reads 一直为 0：第一次运行可能是冷缓存写入，Claude Code 可能没有报告 usage，或者 prompt 低于模型可缓存长度。
+- `cache.inputTokens` 是 Claude Code 报告的 residual uncached input tokens，不是 total input tokens。`cache.effective: "disabled"` 只表示没有请求 1 小时 cache hint；5 分钟 cache 活动仍可能出现在 `cache.cacheCreation`。
 
 更多信息见 [docs/troubleshooting.md](docs/troubleshooting.md)。
+
+## 维护者研究
+
+产品路径继续使用 Claude Code print mode（`claude -p`），因为它能直接返回结构化结果。维护者可以运行本地 research harness 来观察重复调用 cache 行为，而不改变 packet routing：
+
+```bash
+npm run research:cache-repeat -- --runs 2 --stable-location stdin --dynamic-mode suffix
+codex-cc-reviewer preview --task review_diff --context "Cache experiment" > packet.md
+npm run research:cache-repeat -- --packet-file packet.md --dynamic-mode same
+```
+
+`research:cache-repeat` 会把 packet-file 内容通过 stdin 传给 Claude Code，绝不放进 argv；输出的 JSON summary 不包含 prompt、packet、stdin 或 stderr 正文。它提供重复调用 cache 行为的方向性证据，不是 `cc_review` 的逐字节生产路径回放。Packet-file 实验成本会随 packet 大小乘以 run 次数增长，首次实验建议先用小到中等大小的 preview packet。Packet reorder 仍未实现，只有 cache ground-truth 证据显示它能实质降低重复调用成本时才会继续推进。真正的 npm 发布仍由 `.github/workflows/release.yml` 在推送版本 tag 后通过 Trusted Publishing 完成；本地 npm 命令只用于验证。
 
 ## 和相关项目有什么不同
 

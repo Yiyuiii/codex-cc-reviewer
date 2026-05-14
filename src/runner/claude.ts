@@ -6,6 +6,7 @@ import { buildReviewPacket } from "../review/packet.js";
 import { createClaudeStreamParser } from "../review/activity.js";
 import type { CcReviewActivityEvent } from "../review/activity.js";
 import { analyzeCacheUsage, parseCacheUsage } from "../review/cache.js";
+import type { CacheUsage } from "../review/cache.js";
 import type { CcReviewInput, CcReviewOutput } from "../review/schema.js";
 
 const DEFAULT_TIMEOUT_MS = 15 * 60 * 1000;
@@ -180,10 +181,7 @@ interface ParsedClaudeOutput {
   transcriptTail?: string[];
   activityTail?: CcReviewActivityEvent[];
   eventCount?: number;
-  cache?: {
-    creationInputTokens?: number;
-    readInputTokens?: number;
-  };
+  cache?: Omit<CacheUsage, "effective">;
   costUsd?: number;
   diagnostics?: string[];
 }

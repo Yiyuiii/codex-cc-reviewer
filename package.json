@@ -19,6 +19,7 @@
     "prompts",
     "examples",
     "scripts/research-bg-ab.mjs",
+    "scripts/research-cache-repeat.mjs",
     "AGENTS.md",
     "docs/installation.md",
     "docs/manual-setup.md",
@@ -41,7 +42,8 @@
     "verify:release": "npm run typecheck && npm test && npm run build && npm pack --dry-run --json && node dist/index.js --version && node dist/index.js --help",
     "preflight": "npm ci && npm run verify:release",
     "prepublishOnly": "npm run typecheck && npm test && npm run build",
-    "research:bg-ab": "node scripts/research-bg-ab.mjs"
+    "research:bg-ab": "node scripts/research-bg-ab.mjs",
+    "research:cache-repeat": "node scripts/research-cache-repeat.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.23.0",

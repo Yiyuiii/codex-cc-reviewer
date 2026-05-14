@@ -79,8 +79,13 @@ describe("runClaudeReview", () => {
             result: "No findings.",
             total_cost_usd: 0.12,
             usage: {
+              input_tokens: 12,
               cache_creation_input_tokens: 1000,
-              cache_read_input_tokens: 2000
+              cache_read_input_tokens: 2000,
+              cache_creation: {
+                ephemeral_1h_input_tokens: 750,
+                ephemeral_5m_input_tokens: 250
+              }
             }
           })
         ].join("\n"),
@@ -111,8 +116,13 @@ describe("runClaudeReview", () => {
     ]);
     expect(result.eventCount).toBe(5);
     expect(result.cache).toEqual({
+      inputTokens: 12,
       creationInputTokens: 1000,
       readInputTokens: 2000,
+      cacheCreation: {
+        ephemeral1hInputTokens: 750,
+        ephemeral5mInputTokens: 250
+      },
       effective: "hit"
     });
     expect(result.costUsd).toBe(0.12);
@@ -148,13 +158,22 @@ describe("runClaudeReview", () => {
     const execute: ClaudeExecutor = async (...args) => {
       observed = args;
       return {
-        stdout: JSON.stringify({ result: "No findings." }),
+        stdout: JSON.stringify({
+          result: "No findings.",
+          usage: {
+            input_tokens: 3,
+            cache_creation: {
+              ephemeral_1h_input_tokens: 17,
+              ephemeral_5m_input_tokens: 19
+            }
+          }
+        }),
         stderr: "",
         exitCode: 0
       };
     };
 
-    await runClaudeReview(
+    const result = await runClaudeReview(
       {
         ...baseInput,
         stream: false,
@@ -168,13 +187,27 @@ describe("runClaudeReview", () => {
     );
 
     expect(observed?.[2].env?.ENABLE_PROMPT_CACHING_1H).toBe("0");
+    expect(result.cache).toEqual({
+      inputTokens: 3,
+      cacheCreation: {
+        ephemeral1hInputTokens: 17,
+        ephemeral5mInputTokens: 19
+      },
+      effective: "disabled"
+    });
   });
 
   it("extracts structured output when Claude returns JSON schema output", async () => {
     const execute: ClaudeExecutor = async () => ({
       stdout: JSON.stringify({
         result: "Needs changes.",
-        structured_output: { verdict: "needs_changes", findings: [] }
+        structured_output: { verdict: "needs_changes", findings: [] },
+        usage: {
+          input_tokens: 5,
+          cache_creation: {
+            ephemeral_5m_input_tokens: 21
+          }
+        }
       }),
       stderr: "",
       exitCode: 0
@@ -195,6 +228,13 @@ describe("runClaudeReview", () => {
 
     expect(result.review).toBe("Needs changes.");
     expect(result.structured).toEqual({ verdict: "needs_changes", findings: [] });
+    expect(result.cache).toEqual({
+      inputTokens: 5,
+      cacheCreation: {
+        ephemeral5mInputTokens: 21
+      },
+      effective: "write"
+    });
   });
 
   it("uses the streaming executor and reports activity as stdout lines arrive", async () => {
@@ -213,8 +253,12 @@ describe("runClaudeReview", () => {
         type: "result",
         result: "Final streaming review.",
         usage: {
+          input_tokens: 4,
           cache_creation_input_tokens: 0,
-          cache_read_input_tokens: 12
+          cache_read_input_tokens: 12,
+          cache_creation: {
+            ephemeral_1h_input_tokens: 0
+          }
         }
       })
     ];
@@ -255,7 +299,15 @@ describe("runClaudeReview", () => {
       "assistant_text",
       "result"
     ]);
-    expect(result.cache?.effective).toBe("hit");
+    expect(result.cache).toEqual({
+      inputTokens: 4,
+      creationInputTokens: 0,
+      readInputTokens: 12,
+      cacheCreation: {
+        ephemeral1hInputTokens: 0
+      },
+      effective: "hit"
+    });
   });
 
   it("returns stderr tail and exit code when Claude fails", async () => {

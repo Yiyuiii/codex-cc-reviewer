@@ -55,8 +55,17 @@ function formatActivity(result: CcReviewOutput): string | undefined {
     if (result.cache.effective !== undefined) {
       cacheParts.push(`cache effective: ${result.cache.effective}`);
     }
+    if (result.cache.inputTokens !== undefined) {
+      cacheParts.push(`input tokens (uncached): ${result.cache.inputTokens}`);
+    }
     if (result.cache.creationInputTokens !== undefined) {
       cacheParts.push(`cache creation tokens: ${result.cache.creationInputTokens}`);
+    }
+    if (result.cache.cacheCreation?.ephemeral1hInputTokens !== undefined) {
+      cacheParts.push(`cache creation 1h tokens: ${result.cache.cacheCreation.ephemeral1hInputTokens}`);
+    }
+    if (result.cache.cacheCreation?.ephemeral5mInputTokens !== undefined) {
+      cacheParts.push(`cache creation 5m tokens: ${result.cache.cacheCreation.ephemeral5mInputTokens}`);
     }
     if (result.cache.readInputTokens !== undefined) {
       cacheParts.push(`cache read tokens: ${result.cache.readInputTokens}`);

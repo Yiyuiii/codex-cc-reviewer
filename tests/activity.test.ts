@@ -54,8 +54,13 @@ describe("createClaudeStreamParser", () => {
         result: "Final review.",
         total_cost_usd: 0.42,
         usage: {
+          input_tokens: 12,
           cache_creation_input_tokens: 100,
-          cache_read_input_tokens: 200
+          cache_read_input_tokens: 200,
+          cache_creation: {
+            ephemeral_1h_input_tokens: 80,
+            ephemeral_5m_input_tokens: 20
+          }
         }
       })
     ]) {
@@ -67,8 +72,13 @@ describe("createClaudeStreamParser", () => {
     expect(result.review).toBe("Final review.");
     expect(result.costUsd).toBe(0.42);
     expect(result.cache).toEqual({
+      inputTokens: 12,
       creationInputTokens: 100,
-      readInputTokens: 200
+      readInputTokens: 200,
+      cacheCreation: {
+        ephemeral1hInputTokens: 80,
+        ephemeral5mInputTokens: 20
+      }
     });
     expect(result.transcriptTail).toEqual([
       "I will inspect the repo.",

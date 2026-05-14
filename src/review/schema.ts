@@ -110,8 +110,15 @@ export const CcReviewOutputSchema = z.object({
   eventCount: z.number().int().nonnegative().optional(),
   cache: z
     .object({
+      inputTokens: z.number().int().nonnegative().optional(),
       creationInputTokens: z.number().int().nonnegative().optional(),
       readInputTokens: z.number().int().nonnegative().optional(),
+      cacheCreation: z
+        .object({
+          ephemeral1hInputTokens: z.number().int().nonnegative().optional(),
+          ephemeral5mInputTokens: z.number().int().nonnegative().optional()
+        })
+        .optional(),
       effective: z.enum(["hit", "write", "miss_or_unreported", "disabled"]).optional()
     })
     .optional(),
