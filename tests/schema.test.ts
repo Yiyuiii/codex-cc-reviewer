@@ -17,6 +17,7 @@ describe("CcReviewInputSchema", () => {
     expect(parsed.includeGitDiff).toBe(false);
     expect(parsed.includeGitStatus).toBe(false);
     expect(parsed.autoDiscoverGit).toBeUndefined();
+    expect(parsed.includeUntrackedContent).toBeUndefined();
     expect(parsed.redactSecrets).toBe(false);
     expect(parsed.maxContextChars).toBe(120_000);
     expect(parsed.stream).toBe(true);
@@ -84,7 +85,8 @@ describe("CcReviewInputSchema", () => {
       acceptanceCriteria: "Published package uses the new README.",
       knownRisks: ["GitHub Actions may lag."],
       testsRun: ["npm test: passed"],
-      autoDiscoverGit: false
+      autoDiscoverGit: false,
+      includeUntrackedContent: true
     });
 
     expect(parsed.originalGoal).toBe("Add a safer release flow.");
@@ -94,6 +96,7 @@ describe("CcReviewInputSchema", () => {
     expect(parsed.knownRisks).toEqual(["GitHub Actions may lag."]);
     expect(parsed.testsRun).toEqual(["npm test: passed"]);
     expect(parsed.autoDiscoverGit).toBe(false);
+    expect(parsed.includeUntrackedContent).toBe(true);
   });
 
   it("normalizes empty structured list fields to undefined", () => {

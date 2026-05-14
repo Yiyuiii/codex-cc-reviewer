@@ -18,6 +18,7 @@ describe("release assurance configuration", () => {
   it("exposes local preflight scripts with pack and CLI smoke checks", async () => {
     const packageJson = JSON.parse(await readWorkspaceFile("package.json")) as {
       scripts: Record<string, string>;
+      files: string[];
     };
 
     expect(packageJson.scripts.preflight).toContain("npm ci");
@@ -28,6 +29,28 @@ describe("release assurance configuration", () => {
     expect(packageJson.scripts["verify:release"]).toContain("npm pack --dry-run --json");
     expect(packageJson.scripts["verify:release"]).toContain("node dist/index.js --version");
     expect(packageJson.scripts["verify:release"]).toContain("node dist/index.js --help");
+    expect(packageJson.scripts["research:bg-ab"]).toBe("node scripts/research-bg-ab.mjs");
+    expect(packageJson.files).toContain("scripts/research-bg-ab.mjs");
+  });
+
+  it("keeps the maintainer bg research harness available to package scripts", async () => {
+    const script = await readWorkspaceFile("scripts/research-bg-ab.mjs");
+
+    expect(script).toContain("shell: false");
+    expect(script).toContain("--bg");
+    expect(script).toContain("research harness only");
+  });
+
+  it("exposes packet preview without importing the Claude runner", async () => {
+    const index = await readWorkspaceFile("src/index.ts");
+    const preview = await readWorkspaceFile("src/cli/preview.ts");
+
+    expect(index).toContain('.command("preview")');
+    expect(index).toContain("--include-untracked-content");
+    expect(index).toContain("--no-include-untracked-content");
+    expect(preview).toContain("buildReviewPacket");
+    expect(preview).not.toContain("runClaudeReview");
+    expect(preview).not.toContain("../runner/claude");
   });
 
   it("runs CI with cancellation, timeout, package smoke checks, and artifacts", async () => {

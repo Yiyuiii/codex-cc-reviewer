@@ -87,6 +87,7 @@ export const CcReviewInputSchema = z.object({
   includeGitDiff: z.boolean().default(false),
   includeGitStatus: z.boolean().default(false),
   autoDiscoverGit: z.boolean().optional(),
+  includeUntrackedContent: z.boolean().optional(),
   redactSecrets: z.boolean().default(false),
   maxContextChars: z.number().int().min(1_000).max(1_000_000).default(120_000),
   stream: z.boolean().default(true),

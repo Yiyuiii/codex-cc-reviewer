@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { parseUnifiedDiff } from "../src/review/diff-parser.js";
+import { isGeneratedOrLockfilePath, parseUnifiedDiff } from "../src/review/diff-parser.js";
 
 describe("parseUnifiedDiff", () => {
   it("returns no files for an empty diff", () => {
@@ -125,5 +125,12 @@ describe("parseUnifiedDiff", () => {
       path: "npm-shrinkwrap.json",
       generated: true
     });
+  });
+
+  it("does not classify source cache directories as generated output", () => {
+    expect(isGeneratedOrLockfilePath("src/cache/session.ts")).toBe(false);
+    expect(isGeneratedOrLockfilePath("src/foo/cache/session.ts")).toBe(false);
+    expect(isGeneratedOrLockfilePath("cache/session.json")).toBe(true);
+    expect(isGeneratedOrLockfilePath(".cache/session.json")).toBe(true);
   });
 });

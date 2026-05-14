@@ -36,6 +36,18 @@ const DEFAULT_TOTAL_BUDGET_CHARS = 80_000;
 const DEFAULT_FULL_FILE_MAX_CHARS = 12_000;
 const DEFAULT_MAX_MANIFEST_ROWS = 200;
 const MIN_PARTIAL_CHARS = 120;
+const GENERATED_RANK = 70;
+
+interface ClassifiedDiffFile {
+  file: ParsedDiffFile;
+  risk: RiskClassification;
+  originalIndex: number;
+}
+
+interface RiskClassification {
+  rank: number;
+  category: string;
+}
 
 export function routeDiffForReview(
   files: ParsedDiffFile[],
@@ -47,9 +59,16 @@ export function routeDiffForReview(
   const sections: RoutedDiffSection[] = [];
   const manifestRows: RoutedDiffManifestRow[] = [];
   let remainingBudget = Math.max(0, totalBudgetChars);
+  const routedFiles = files
+    .map((file, originalIndex): ClassifiedDiffFile => ({
+      file,
+      risk: classifyDiffRisk(file),
+      originalIndex
+    }))
+    .sort(compareClassifiedDiffFiles);
 
-  for (const file of files) {
-    const routed = routeFile(file, remainingBudget, fullFileMaxChars);
+  for (const { file, risk } of routedFiles) {
+    const routed = routeFile(file, risk, remainingBudget, fullFileMaxChars);
     manifestRows.push({
       path: file.path,
       status: file.status,
@@ -74,6 +93,7 @@ export function routeDiffForReview(
 
 function routeFile(
   file: ParsedDiffFile,
+  risk: RiskClassification,
   remainingBudget: number,
   fullFileMaxChars: number
 ): {
@@ -82,25 +102,26 @@ function routeFile(
   section?: RoutedDiffSection;
 } {
   if (file.binary) {
-    return { inclusion: "omitted", reason: "binary" };
+    return { inclusion: "omitted", reason: formatReason(risk, "omitted") };
   }
 
   if (file.generated) {
-    return { inclusion: "omitted", reason: "generated_or_lockfile" };
+    return { inclusion: "omitted", reason: formatReason(risk, "omitted") };
   }
 
   if (remainingBudget < MIN_PARTIAL_CHARS) {
-    return { inclusion: "omitted", reason: "budget_exhausted" };
+    return { inclusion: "omitted", reason: formatReason(risk, "budget_exhausted") };
   }
 
   if (file.raw.length <= fullFileMaxChars && file.raw.length <= remainingBudget) {
+    const reason = formatReason(risk, "source diff within budget");
     return {
       inclusion: "full",
-      reason: "source diff within budget",
+      reason,
       section: {
         path: file.path,
         inclusion: "full",
-        reason: "source diff within budget",
+        reason,
         content: file.raw
       }
     };
@@ -108,21 +129,151 @@ function routeFile(
 
   const partialBudget = Math.min(remainingBudget, Math.max(fullFileMaxChars, 2_000));
   if (partialBudget < MIN_PARTIAL_CHARS) {
-    return { inclusion: "omitted", reason: "budget_exhausted" };
+    return { inclusion: "omitted", reason: formatReason(risk, "budget_exhausted") };
   }
 
   const content = truncateMiddle(file.raw, partialBudget);
+  const reason = formatReason(risk, "truncated_to_budget");
   return {
     inclusion: "partial",
-    reason: "truncated_to_budget",
+    reason,
     section: {
       path: file.path,
       inclusion: "partial",
-      reason: "truncated_to_budget",
+      reason,
       content,
       omittedChars: Math.max(0, file.raw.length - content.length)
     }
   };
+}
+
+function compareClassifiedDiffFiles(left: ClassifiedDiffFile, right: ClassifiedDiffFile): number {
+  if (left.risk.rank !== right.risk.rank) {
+    return left.risk.rank - right.risk.rank;
+  }
+
+  if (left.file.raw.length !== right.file.raw.length) {
+    return left.file.raw.length - right.file.raw.length;
+  }
+
+  return left.originalIndex - right.originalIndex;
+}
+
+function classifyDiffRisk(file: ParsedDiffFile): RiskClassification {
+  if (file.binary) {
+    return { rank: GENERATED_RANK, category: "binary" };
+  }
+
+  if (file.generated) {
+    return { rank: GENERATED_RANK, category: "generated_or_lockfile" };
+  }
+
+  const normalized = file.path.replace(/\\/g, "/").toLowerCase();
+
+  if (normalized.startsWith("src/mcp/")) {
+    return { rank: 1, category: "mcp_transport" };
+  }
+
+  if (normalized.startsWith("src/runner/")) {
+    return { rank: 1, category: "claude_runner" };
+  }
+
+  if (normalized.startsWith("src/review/")) {
+    return { rank: 1, category: "review_packet" };
+  }
+
+  if (normalized.startsWith("src/config/")) {
+    return { rank: 1, category: "config_surface" };
+  }
+
+  if (
+    normalized === "src/index.ts" ||
+    normalized.startsWith("src/cache/") ||
+    normalized.startsWith("src/progress/")
+  ) {
+    return { rank: 1, category: "entrypoint" };
+  }
+
+  if (normalized.startsWith(".github/workflows/")) {
+    return { rank: 2, category: "release_workflow" };
+  }
+
+  if (normalized === "package.json" || normalized === "agents.md") {
+    return { rank: 2, category: "release_surface" };
+  }
+
+  if (
+    normalized === "src/cli/install.ts" ||
+    normalized === "src/cli/uninstall.ts" ||
+    normalized === "src/cli/doctor.ts"
+  ) {
+    return { rank: 2, category: "install_surface" };
+  }
+
+  if (
+    normalized === "readme.md" ||
+    normalized === "readme.zh-cn.md" ||
+    normalized === "docs/installation.md" ||
+    normalized === "docs/codex-usage.md" ||
+    normalized === "docs/tool-contract.md" ||
+    normalized === "docs/troubleshooting.md"
+  ) {
+    return { rank: 2, category: "workflow_docs" };
+  }
+
+  if (hasSecurityOrConfigToken(normalized)) {
+    return { rank: 3, category: "security_config" };
+  }
+
+  if (isTestPath(normalized)) {
+    return { rank: 5, category: "tests" };
+  }
+
+  if (isSourcePath(normalized)) {
+    return { rank: 4, category: "source" };
+  }
+
+  if (isDocsOrExamplePath(normalized)) {
+    return { rank: 6, category: "docs" };
+  }
+
+  return { rank: 6, category: "other" };
+}
+
+function hasSecurityOrConfigToken(path: string): boolean {
+  const tokens = path.split(/[\/._-]+/).filter(Boolean);
+  return tokens.some((token) =>
+    [
+      "security",
+      "auth",
+      "permission",
+      "permissions",
+      "secret",
+      "secrets",
+      "token",
+      "tokens",
+      "credential",
+      "credentials",
+      "config",
+      "env"
+    ].includes(token)
+  );
+}
+
+function isSourcePath(path: string): boolean {
+  return /\.(?:cjs|cts|js|jsx|mjs|mts|ts|tsx)$/.test(path) || path.startsWith("src/");
+}
+
+function isTestPath(path: string): boolean {
+  return /(^|\/)(tests?|__tests__)\//.test(path) || /\.(?:spec|test)\.(?:cjs|cts|js|jsx|mjs|mts|ts|tsx)$/.test(path);
+}
+
+function isDocsOrExamplePath(path: string): boolean {
+  return path.startsWith("docs/") || path.startsWith("examples/") || /\.(?:md|mdx|txt)$/.test(path);
+}
+
+function formatReason(risk: RiskClassification, routeReason: string): string {
+  return `risk: ${risk.category}; ${routeReason}`;
 }
 
 function formatRoutedDiffMarkdown(
@@ -182,6 +333,7 @@ function formatManifestRow(row: RoutedDiffManifestRow): string {
 }
 
 function formatSection(section: RoutedDiffSection): string {
+  const fence = markdownFenceFor(section.content);
   return [
     `### ${section.path}`,
     "",
@@ -189,9 +341,9 @@ function formatSection(section: RoutedDiffSection): string {
     `Reason: ${section.reason}`,
     section.omittedChars ? `Omitted chars: ${section.omittedChars}` : undefined,
     "",
-    "```diff",
+    `${fence}diff`,
     section.content,
-    "```"
+    fence
   ]
     .filter((line): line is string => line !== undefined)
     .join("\n");
@@ -199,4 +351,12 @@ function formatSection(section: RoutedDiffSection): string {
 
 function escapeTableCell(value: string): string {
   return value.replace(/\|/g, "\\|").replace(/\r?\n/g, " ");
+}
+
+function markdownFenceFor(content: string): string {
+  const longest = [...content.matchAll(/`+/g)].reduce(
+    (maxLength, match) => Math.max(maxLength, match[0]?.length ?? 0),
+    0
+  );
+  return "`".repeat(Math.max(3, longest + 1));
 }

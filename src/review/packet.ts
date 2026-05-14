@@ -1,16 +1,22 @@
 import { getGitDiff as defaultGetGitDiff } from "../git/diff.js";
 import { getGitSummary as defaultGetGitSummary } from "../git/summary.js";
 import { getGitStatus as defaultGetGitStatus } from "../git/status.js";
+import {
+  getUntrackedFileEvidence as defaultGetUntrackedFileEvidence,
+  type UntrackedFileEvidence
+} from "../git/untracked.js";
 import { truncateMiddle } from "../utils/truncate.js";
 import { routeDiffForReview } from "./context-router.js";
 import { parseUnifiedDiff } from "./diff-parser.js";
 import { REVIEWER_PROMPT } from "./prompts.js";
 import type { CcReviewInput } from "./schema.js";
+import { routeUntrackedForReview } from "./untracked-router.js";
 
 export interface ReviewPacketDeps {
   getGitSummary?: (cwd?: string) => Promise<string>;
   getGitStatus?: (cwd?: string) => Promise<string>;
   getGitDiff?: (cwd?: string) => Promise<string>;
+  getUntrackedFileEvidence?: (cwd?: string) => Promise<UntrackedFileEvidence[]>;
 }
 
 export async function buildReviewPacket(
@@ -20,25 +26,36 @@ export async function buildReviewPacket(
   const getGitSummary = deps.getGitSummary ?? defaultGetGitSummary;
   const getGitStatus = deps.getGitStatus ?? defaultGetGitStatus;
   const getGitDiff = deps.getGitDiff ?? defaultGetGitDiff;
+  const getUntrackedFileEvidence = deps.getUntrackedFileEvidence ?? defaultGetUntrackedFileEvidence;
   const cwd = input.cwd ?? process.cwd();
   const autoDiscoverRawGit = shouldAutoDiscoverRawGit(input);
   const includeGitSummary = shouldIncludeGitSummary(input);
   const includeGitStatus = input.includeGitStatus || autoDiscoverRawGit;
   const includeGitDiff = input.includeGitDiff || autoDiscoverRawGit;
+  const includeUntrackedContent = shouldIncludeUntrackedContent(input, autoDiscoverRawGit);
 
-  const [rawGitSummary, rawGitStatus, rawGitDiff] = await Promise.all([
+  const [rawGitSummary, rawGitStatus, rawGitDiff, rawUntrackedFiles] = await Promise.all([
     includeGitSummary ? getGitSummary(cwd) : Promise.resolve(undefined),
     includeGitStatus ? getGitStatus(cwd) : Promise.resolve(undefined),
-    includeGitDiff ? getGitDiff(cwd) : Promise.resolve(undefined)
+    includeGitDiff ? getGitDiff(cwd) : Promise.resolve(undefined),
+    includeUntrackedContent ? getUntrackedFileEvidence(cwd) : Promise.resolve(undefined)
   ]);
   const diagnostics = buildPacketDiagnostics(
     input,
     rawGitSummary,
     rawGitStatus,
     rawGitDiff,
+    rawUntrackedFiles,
     autoDiscoverRawGit
   );
-  const budgeted = prepareVariableBlocks(input, rawGitSummary, rawGitStatus, rawGitDiff, diagnostics);
+  const budgeted = prepareVariableBlocks(
+    input,
+    rawGitSummary,
+    rawGitStatus,
+    rawGitDiff,
+    rawUntrackedFiles,
+    diagnostics
+  );
   const instructions = [
     REVIEWER_PROMPT,
     "Act as an external reviewer.",
@@ -88,6 +105,10 @@ export async function buildReviewPacket(
     sections.push(budgeted.gitDiff);
   }
 
+  if (budgeted.untrackedEvidence?.trim()) {
+    sections.push(budgeted.untrackedEvidence);
+  }
+
   if (budgeted.diagnostics !== undefined) {
     sections.push("## Packet Diagnostics", budgeted.diagnostics);
   }
@@ -106,6 +127,7 @@ interface VariableBlocks {
   gitSummary?: string;
   gitStatus?: string;
   gitDiff?: string;
+  untrackedEvidence?: string;
   diagnostics?: string;
 }
 
@@ -114,10 +136,17 @@ function prepareVariableBlocks(
   rawGitSummary: string | undefined,
   rawGitStatus: string | undefined,
   rawGitDiff: string | undefined,
+  rawUntrackedFiles: UntrackedFileEvidence[] | undefined,
   diagnostics: string[]
 ): VariableBlocks {
   const variableBudget = Math.max(300, input.maxContextChars - 500);
-  const blocks = [
+  const hasUntrackedEvidence = rawUntrackedFiles !== undefined && rawUntrackedFiles.length > 0;
+  const blocks: Array<{
+    key: keyof VariableBlocks;
+    value: string | undefined;
+    weight: number;
+    kind?: "gitDiff";
+  }> = [
     {
       key: "originalGoal",
       value: input.originalGoal ?? "Not provided.",
@@ -151,14 +180,15 @@ function prepareVariableBlocks(
     { key: "context", value: input.context, weight: 0.45 },
     { key: "gitSummary", value: rawGitSummary, weight: rawGitSummary !== undefined ? 0.08 : 0 },
     { key: "gitStatus", value: rawGitStatus, weight: rawGitStatus !== undefined ? 0.1 : 0 },
-    { key: "gitDiff", value: rawGitDiff, weight: rawGitDiff !== undefined ? 0.3 : 0 },
+    { key: "gitDiff", value: rawGitDiff, weight: rawGitDiff !== undefined ? 0.3 : 0, kind: "gitDiff" },
     {
       key: "diagnostics",
       value: diagnostics.length ? formatList(diagnostics) : undefined,
       weight: diagnostics.length ? 0.03 : 0
     }
-  ] as const;
-  const totalWeight = blocks.reduce((sum, block) => sum + block.weight, 0);
+  ];
+  const untrackedWeight = hasUntrackedEvidence ? 0.18 : 0;
+  const totalWeight = blocks.reduce((sum, block) => sum + block.weight, untrackedWeight);
   const prepared: Partial<VariableBlocks> = {};
 
   for (const block of blocks) {
@@ -166,9 +196,18 @@ function prepareVariableBlocks(
 
     const blockBudget = Math.max(100, Math.floor((variableBudget * block.weight) / totalWeight));
     prepared[block.key] =
-      block.key === "gitDiff"
+      block.kind === "gitDiff"
         ? prepareGitDiffBlock(block.value, blockBudget, input.redactSecrets)
         : prepareBlock(block.value, blockBudget, input.redactSecrets);
+  }
+
+  if (hasUntrackedEvidence) {
+    const blockBudget = Math.max(100, Math.floor((variableBudget * untrackedWeight) / totalWeight));
+    prepared.untrackedEvidence = prepareUntrackedBlock(
+      rawUntrackedFiles,
+      blockBudget,
+      input.redactSecrets
+    );
   }
 
   return {
@@ -182,6 +221,7 @@ function prepareVariableBlocks(
     gitSummary: prepared.gitSummary,
     gitStatus: prepared.gitStatus,
     gitDiff: prepared.gitDiff,
+    untrackedEvidence: prepared.untrackedEvidence,
     diagnostics: diagnostics.length ? prepared.diagnostics : undefined
   };
 }
@@ -198,8 +238,38 @@ function prepareGitDiffBlock(value: string, maxChars: number, shouldRedact: bool
   return routeDiffForReview(parsed, { totalBudgetChars: maxChars }).markdown;
 }
 
+function prepareUntrackedBlock(
+  files: UntrackedFileEvidence[],
+  maxChars: number,
+  shouldRedact: boolean
+): string {
+  const preparedFiles = files.map((file): UntrackedFileEvidence => {
+    if (file.inclusion === "candidate" && file.content !== undefined && shouldRedact) {
+      return {
+        ...file,
+        content: redactSecrets(file.content)
+      };
+    }
+
+    return file;
+  });
+
+  return routeUntrackedForReview(preparedFiles, {
+    totalBudgetChars: maxChars,
+    contentRedacted: shouldRedact
+  }).markdown;
+}
+
 export function redactSecrets(value: string): string {
   return value
+    .replace(
+      /-----BEGIN [^-]*PRIVATE KEY-----[\s\S]*?-----END [^-]*PRIVATE KEY-----/g,
+      "[REDACTED PRIVATE KEY BLOCK]"
+    )
+    .replace(
+      /\b(?:export\s+)?([A-Z][A-Z0-9_]*(?:PASSWORDS?|PASSWDS?|SECRETS?|TOKENS?|KEYS?|URLS?|URIS?|DSNS?)|URL|URI|DSN|JWT|BEARER|AUTH|CONNECTION_STRING|PRIVATE_KEY(?:_PEM)?)\b\s*=\s*("[^"]*"|'[^']*'|[^\s;]+)/g,
+      "$1=[REDACTED]"
+    )
     .replace(/\b(?:sk|rk|pk)-[A-Za-z0-9_-]{8,}\b/g, "[REDACTED]")
     .replace(
       /\b(password|passwd|api[_-]?key|secret|token)\b\s*[:=]\s*("[^"]*"|'[^']*'|[^\s,;]+)/gi,
@@ -219,6 +289,14 @@ function shouldAutoDiscoverRawGit(input: CcReviewInput): boolean {
   return input.task === "review_diff" || input.task === "adversarial_review";
 }
 
+function shouldIncludeUntrackedContent(input: CcReviewInput, autoDiscoverRawGit: boolean): boolean {
+  if (input.includeUntrackedContent !== undefined) {
+    return input.includeUntrackedContent;
+  }
+
+  return autoDiscoverRawGit && (input.task === "review_diff" || input.task === "adversarial_review");
+}
+
 function shouldIncludeGitSummary(input: CcReviewInput): boolean {
   if (input.autoDiscoverGit === false) {
     return input.includeGitStatus || input.includeGitDiff;
@@ -232,6 +310,7 @@ function buildPacketDiagnostics(
   rawGitSummary: string | undefined,
   rawGitStatus: string | undefined,
   rawGitDiff: string | undefined,
+  rawUntrackedFiles: UntrackedFileEvidence[] | undefined,
   autoDiscoverGit: boolean
 ): string[] {
   // Only diff-oriented tasks treat missing git evidence as notable by default.
@@ -239,7 +318,7 @@ function buildPacketDiagnostics(
     return [];
   }
 
-  if (rawGitSummary?.trim() || rawGitStatus?.trim() || rawGitDiff?.trim()) {
+  if (rawGitSummary?.trim() || rawGitStatus?.trim() || rawGitDiff?.trim() || rawUntrackedFiles?.length) {
     return [];
   }
 

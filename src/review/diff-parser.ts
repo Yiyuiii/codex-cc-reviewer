@@ -107,7 +107,7 @@ function isFileHeaderLine(line: string): boolean {
   return line === "+++" || line === "---" || line.startsWith("+++ ") || line.startsWith("--- ");
 }
 
-function isGeneratedOrLockfilePath(path: string): boolean {
+export function isGeneratedOrLockfilePath(path: string): boolean {
   const normalized = path.replace(/\\/g, "/").toLowerCase();
   const basename = normalized.split("/").at(-1) ?? normalized;
 
@@ -123,5 +123,5 @@ function isGeneratedOrLockfilePath(path: string): boolean {
     return true;
   }
 
-  return /(^|\/)(dist|build|coverage|\.next|node_modules)\//.test(normalized);
+  return normalized.startsWith("cache/") || /(^|\/)(dist|build|coverage|\.next|node_modules|vendor|\.cache)\//.test(normalized);
 }

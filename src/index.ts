@@ -4,6 +4,7 @@ import { Command } from "commander";
 
 import { runDoctor } from "./cli/doctor.js";
 import { installCodexConfig } from "./cli/install.js";
+import { runLocalPreview } from "./cli/preview.js";
 import { runLocalReview } from "./cli/review.js";
 import { uninstallCodexConfig } from "./cli/uninstall.js";
 import { serveMcp } from "./mcp/server.js";
@@ -13,7 +14,7 @@ const program = new Command();
 program
   .name("codex-cc-reviewer")
   .description("Use Claude Code as an external reviewer from Codex.")
-  .version("0.2.3");
+  .version("0.3.0-rc.0");
 
 program
   .command("serve")
@@ -69,6 +70,10 @@ program
   .option("--include-git-diff", "Include git diff in the review packet")
   .option("--include-git-status", "Include git status in the review packet")
   .option("--disable-auto-discover-git", "Disable task-based git evidence discovery")
+  .option("--include-untracked-content", "Include selected untracked text file bodies")
+  .option("--no-include-untracked-content", "Disable selected untracked text file bodies")
+  .option("--redact-secrets", "Apply best-effort secret redaction before building the packet")
+  .option("--max-context-chars <chars>", "Maximum packet context characters")
   .option("--no-stream", "Disable Claude Code stream-json output")
   .option("--no-include-partial-messages", "Disable partial message events when streaming")
   .option("--no-include-hook-events", "Disable hook events when streaming")
@@ -82,6 +87,42 @@ program
       reviewOptions.autoDiscoverGit = false;
     }
     await runLocalReview(reviewOptions);
+  });
+
+program
+  .command("preview")
+  .description("Print a review packet without starting Claude Code")
+  .requiredOption("--task <task>", "review_plan | review_diff | review_doc | adversarial_review")
+  .requiredOption("--context <context>", "Inline review context")
+  .option("--prompt <prompt>", "Backward-compatible alias for review focus")
+  .option("--original-goal <goal>", "Original user goal or acceptance context")
+  .option("--review-focus <focus>", "Specific review focus for this run")
+  .option("--codex-summary <summary>", "Codex implementation summary")
+  .option("--acceptance-criteria <criteria>", "Acceptance criteria; repeatable", collect, [])
+  .option("--known-risk <risk>", "Known risk; repeatable", collect, [])
+  .option("--test-run <test>", "Test or verification already run; repeatable", collect, [])
+  .option("--model <model>", "Claude model alias or full model name")
+  .option("--effort <effort>", "low | medium | high | max")
+  .option("--output <output>", "markdown | json")
+  .option("--permission-mode <mode>", "acceptEdits | auto | bypassPermissions | default | dontAsk | plan")
+  .option("--tools <tools>", "Comma-separated Claude Code tool allowlist")
+  .option("--cwd <cwd>", "Working directory for git evidence discovery")
+  .option("--include-git-diff", "Include git diff in the review packet")
+  .option("--include-git-status", "Include git status in the review packet")
+  .option("--disable-auto-discover-git", "Disable task-based git evidence discovery")
+  .option("--include-untracked-content", "Include selected untracked text file bodies")
+  .option("--no-include-untracked-content", "Disable selected untracked text file bodies")
+  .option("--redact-secrets", "Apply best-effort secret redaction before building the packet")
+  .option("--max-context-chars <chars>", "Maximum packet context characters")
+  .option("--cache-ttl <ttl>", "Prompt cache TTL hint: 5m | 1h")
+  .action(async (options) => {
+    const { knownRisk, testRun, disableAutoDiscoverGit, ...previewOptions } = options;
+    previewOptions.knownRisks = knownRisk;
+    previewOptions.testsRun = testRun;
+    if (disableAutoDiscoverGit) {
+      previewOptions.autoDiscoverGit = false;
+    }
+    await runLocalPreview(previewOptions);
   });
 
 await program.parseAsync();

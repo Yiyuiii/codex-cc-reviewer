@@ -89,8 +89,9 @@ flowchart TD
 
 ## 🆕 Latest Changes
 
-Recent stable release highlights:
+Recent release highlights:
 
+- `v0.3.0-rc.0`: add Review Evidence Routing with risk-priority tracked diffs, selected untracked text bodies by default for diff reviews, `includeUntrackedContent`, and a `preview` CLI for inspecting packets without starting Claude Code. Keep `claude -p` as the supported review backend.
 - `v0.2.3`: release assurance hardening, standard preflight checks, CI/package smoke checks, npm publish validation, and documented final `cc_review` evidence requirements.
 - `v0.2.2`: `install --package-spec <spec>` support for `@next` prerelease validation and clearer `doctor` output for configured package specs.
 - `v0.2.1`: branch-aware release flow with npm Trusted Publishing provenance and a validated `next` prerelease channel.
@@ -143,7 +144,7 @@ This is not:
 
 - Node.js 20 or newer
 - npm
-- Claude Code CLI installed, on `PATH`, and authenticated locally
+- Claude Code CLI `2.1.92` or newer, on `PATH`, and authenticated locally
 - Codex with MCP support
 - A trusted local repository, VM, or dev container
 
@@ -185,6 +186,7 @@ The default mode is intentionally powerful. This package is tuned for a trusted 
 | `permissionMode` | `bypassPermissions` | Skip Claude Code's permission gate so the configured tool allowlist can run unattended. | High risk: passes `--dangerously-skip-permissions`. | Use only in repositories, VMs, dev containers, or local workspaces you control. |
 | `tools` | `["default"]` | Select Claude Code's tool allowlist; MCP accepts JSON arrays, and the local CLI also accepts comma-separated strings. | May broaden what the reviewer can inspect or execute. | Use `["Read", "Grep", "Glob"]` for conservative read-only review. |
 | `redactSecrets` | `false` | Preserve review evidence faithfully. | Sensitive content can be included in packets. | Set `true` for sensitive or shared repositories; treat it as best-effort only. |
+| `includeUntrackedContent` | default-on for `review_diff` and `adversarial_review` | Include selected untracked text bodies in diff-oriented packets. | New local text files can be sent to Claude Code. | Set `false` when you only want untracked paths listed. |
 | `stream` | `true` | Capture stream-json activity, transcript, diagnostics, and cost when reported. | More verbose output. | Keep enabled unless debugging a client that cannot handle streamed output. |
 | `cacheTtl` | `1h` | Hint Claude Code to use the 1-hour prompt cache when available. | Cache reporting can be cold or unavailable. | Keep default; inspect cache diagnostics instead of assuming cache hits. |
 | `maxContextChars` | `120000` | Bound variable review packet blocks. | Larger packets can include more local content and cost more. | Lower for narrow reviews; keep default for high-value diff evidence. |
@@ -205,14 +207,17 @@ Oversized packet blocks are truncated from the middle, keeping both the start an
 
 ### Git Context Routing
 
-For `review_diff` and `adversarial_review`, v0.2 routes git evidence instead of inserting one monolithic diff block. The packet includes:
+For `review_diff` and `adversarial_review`, Review Evidence Routing sends higher-value evidence before lower-value evidence when the packet budget is constrained. The packet includes:
 
 - `Git Evidence Summary`: diff stat, name-status, and untracked file manifest.
 - `Changed Files Manifest`: file, status, inclusion (`full`, `partial`, `omitted`), changed line counts, and routing reason.
 - `Context Routing Guidance`: tells Claude Code when to inspect partial or omitted files with its own tools.
 - `Routed Git Diff Evidence`: selected per-file diff bodies.
+- `Untracked Files Manifest` and `Routed Untracked File Evidence`: selected untracked text files for diff-oriented reviews.
 
-This is the intended tradeoff: Codex provides a reliable map and enough evidence to start review; Claude Code can spend its own tool calls on files that matter instead of receiving a huge undifferentiated diff dump. Generated paths, lockfiles, dist/build output, and binary diffs are listed in the manifest but omitted from the diff body by default.
+Tracked diffs are routed by risk before budget is consumed: MCP transport, runner, packet/schema/config, release/install workflow, and security/config changes are prioritized over routine source, tests, docs, and generated output. Generated paths, lockfiles, dist/build output, dependency/vendor/cache output, minified assets, and binary/null-byte files are listed in manifests but omitted from embedded bodies by default.
+
+Untracked text content is embedded by default for `review_diff` and `adversarial_review` when git auto-discovery is enabled, and untracked candidates are also prioritized before their body budget is consumed. `review_plan` and `review_doc` keep untracked files summary-only unless `includeUntrackedContent` is explicitly `true`. Sensitive-looking filenames are not blocked by name alone; use `redactSecrets: true` for best-effort content redaction.
 
 See [docs/security.md](docs/security.md) for the full security note.
 
@@ -231,12 +236,18 @@ The MCP server exposes one tool: `cc_review`.
 }
 ```
 
-The tool automatically includes a lightweight Git Evidence Summary when git discovery is enabled: diff stat, name-status, and untracked file manifest. For `review_diff` and `adversarial_review`, it also collects raw git status and `git diff HEAD` evidence by default unless `autoDiscoverGit` is set to `false`; the diff is routed into a manifest plus selected per-file evidence. `prompt` remains accepted as a backward-compatible alias for `reviewFocus`.
+The tool automatically includes a lightweight Git Evidence Summary when git discovery is enabled: diff stat, name-status, and untracked file manifest. For `review_diff` and `adversarial_review`, it also collects raw git status, `git diff HEAD`, and selected untracked text file bodies by default unless disabled; tracked and untracked evidence are routed into separate manifests plus selected body evidence. Set `includeUntrackedContent: false` to keep untracked files path-only. `prompt` remains accepted as a backward-compatible alias for `reviewFocus`.
 
 Local CLI test with an optional review focus:
 
 ```bash
 codex-cc-reviewer review --task review_plan --review-focus "Review the plan" --context "..."
+```
+
+Preview the packet without invoking Claude Code:
+
+```bash
+codex-cc-reviewer preview --task review_diff --context "Preview the current packet"
 ```
 
 See [docs/tool-contract.md](docs/tool-contract.md) for all input and output fields.
@@ -295,10 +306,23 @@ Common issues:
 - Codex config is missing: run `codex-cc-reviewer install`.
 - Codex does not show the tool: restart Codex after changing MCP config.
 - Reviews time out: increase `tool_timeout_sec` in Codex config.
+- `doctor` warns about Claude Code daemon or blocked background jobs: run `claude agents` and stop stale sessions with `claude stop <id>` before debugging review failures.
 - Codex only shows one tool call while Claude Code is running: real-time progress requires the Codex MCP client to send `_meta.progressToken`. If it does not, check the final `diagnostics` and `activityTail` fields instead.
 - Cache reads stay at zero: the first run may be a cold cache write, Claude Code may not have reported usage, or the prompt may be below the model's minimum cacheable length.
 
 See [docs/troubleshooting.md](docs/troubleshooting.md) for the full troubleshooting guide.
+
+## Maintainer Research
+
+The product path intentionally uses Claude Code print mode (`claude -p`) because it returns a structured result directly. Claude Code background sessions / Agent View are useful to study, but currently require internal job/transcript files for full-result recovery and have a less stable status surface.
+
+Maintainers can run a local A/B smoke after authenticating an isolated Claude profile:
+
+```bash
+npm run research:bg-ab -- --profile-dir ~/.claude-plan
+```
+
+This script is not part of the MCP tool contract and should not be treated as a supported backend.
 
 ## How Is This Different?
 

@@ -13,7 +13,10 @@ describe("runLocalReview", () => {
         task: "review_diff",
         context: "Review my staged change.",
         tools: "Read, Bash(git diff *)",
-        includeGitDiff: true
+        includeGitDiff: true,
+        includeUntrackedContent: false,
+        redactSecrets: true,
+        maxContextChars: "5000"
       },
       {
         runReview: async (input) => {
@@ -28,6 +31,9 @@ describe("runLocalReview", () => {
     expect(observed?.task).toBe("review_diff");
     expect(observed?.tools).toEqual(["Read", "Bash(git diff *)"]);
     expect(observed?.includeGitDiff).toBe(true);
+    expect(observed?.includeUntrackedContent).toBe(false);
+    expect(observed?.redactSecrets).toBe(true);
+    expect(observed?.maxContextChars).toBe(5_000);
     expect(writes.join("")).toContain("Looks reasonable.");
   });
 

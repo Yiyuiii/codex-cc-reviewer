@@ -20,6 +20,6 @@ Requirements:
 
 - Node.js 20 or newer
 - npm
-- Claude Code CLI authenticated locally
+- Claude Code CLI `2.1.92` or newer and authenticated locally
 - Codex with MCP support
 

@@ -119,8 +119,8 @@ describe("buildReviewPacket", () => {
     );
 
     expect(packet).toContain("## Changed Files Manifest");
-    expect(packet).toContain("| src/foo.ts | modified | full | +1/-0 | source diff within budget |");
-    expect(packet).toContain("| package-lock.json | modified | omitted | +1/-1 | generated_or_lockfile |");
+    expect(packet).toContain("| src/foo.ts | modified | full | +1/-0 | risk: source; source diff within budget |");
+    expect(packet).toContain("| package-lock.json | modified | omitted | +1/-1 | risk: generated_or_lockfile; omitted |");
     expect(packet).toContain("## Context Routing Guidance");
     expect(packet).toContain("partial or omitted");
     expect(packet).toContain("## Routed Git Diff Evidence");
@@ -138,7 +138,8 @@ describe("buildReviewPacket", () => {
       {
         getGitSummary: async () => "Diff Stat\n src/index.ts | 2 +-\nName Status\nM\tsrc/index.ts",
         getGitStatus: async () => "1 .M N... 100644 100644 100644 abc abc src/index.ts",
-        getGitDiff: async () => "diff --git a/src/index.ts b/src/index.ts"
+        getGitDiff: async () => "diff --git a/src/index.ts b/src/index.ts",
+        getUntrackedFileEvidence: async () => []
       }
     );
 
@@ -148,6 +149,260 @@ describe("buildReviewPacket", () => {
     expect(packet).toContain("1 .M N...");
     expect(packet).toContain("## Changed Files Manifest");
     expect(packet).toContain("diff --git a/src/index.ts b/src/index.ts");
+  });
+
+  it("auto-discovers untracked text bodies for review_diff by default", async () => {
+    const packet = await buildReviewPacket(
+      {
+        ...baseInput,
+        autoDiscoverGit: undefined,
+        redactSecrets: false
+      },
+      {
+        getGitSummary: async () => "Untracked Files\n.env",
+        getGitStatus: async () => "? .env",
+        getGitDiff: async () => "",
+        getUntrackedFileEvidence: async () => [
+          {
+            path: ".env",
+            sizeBytes: 49,
+            content: "DATABASE_URL=postgres://user:pwd@localhost/app\n",
+            inclusion: "candidate",
+            reason: "untracked_text"
+          }
+        ]
+      }
+    );
+
+    expect(packet).toContain("## Untracked Files Manifest");
+    expect(packet).toContain("| .env | full |");
+    expect(packet).toContain("## Routed Untracked File Evidence");
+    expect(packet).toContain("DATABASE_URL=postgres://user:pwd@localhost/app");
+    expect(packet).not.toContain("review_diff requested git evidence");
+  });
+
+  it("auto-discovers untracked text bodies for adversarial_review by default", async () => {
+    const packet = await buildReviewPacket(
+      {
+        ...baseInput,
+        task: "adversarial_review",
+        autoDiscoverGit: undefined,
+        redactSecrets: false
+      },
+      {
+        getGitSummary: async () => "Untracked Files\nsrc/new.ts",
+        getGitStatus: async () => "? src/new.ts",
+        getGitDiff: async () => "",
+        getUntrackedFileEvidence: async () => [
+          {
+            path: "src/new.ts",
+            sizeBytes: 19,
+            content: "export const x = 1;\n",
+            inclusion: "candidate",
+            reason: "untracked_text"
+          }
+        ]
+      }
+    );
+
+    expect(packet).toContain("## Routed Untracked File Evidence");
+    expect(packet).toContain("export const x = 1;");
+  });
+
+  it("does not embed untracked bodies for review_plan or review_doc by default", async () => {
+    const calls: string[] = [];
+
+    for (const task of ["review_plan", "review_doc"] as const) {
+      const packet = await buildReviewPacket(
+        {
+          ...baseInput,
+          task,
+          autoDiscoverGit: undefined,
+          redactSecrets: false
+        },
+        {
+          getGitSummary: async () => "Untracked Files\n.env",
+          getGitStatus: async () => {
+            calls.push(`${task}:status`);
+            return "? .env";
+          },
+          getGitDiff: async () => {
+            calls.push(`${task}:diff`);
+            return "";
+          },
+          getUntrackedFileEvidence: async () => {
+            calls.push(`${task}:untracked`);
+            return [
+              {
+                path: ".env",
+                sizeBytes: 49,
+                content: "DATABASE_URL=postgres://user:pwd@localhost/app\n",
+                inclusion: "candidate",
+                reason: "untracked_text"
+              }
+            ];
+          }
+        }
+      );
+
+      expect(packet).toContain("## Git Evidence Summary");
+      expect(packet).not.toContain("## Routed Untracked File Evidence");
+      expect(packet).not.toContain("DATABASE_URL=postgres://user:pwd@localhost/app");
+    }
+
+    expect(calls).toEqual([]);
+  });
+
+  it("allows review_plan to embed untracked bodies when explicitly requested", async () => {
+    const packet = await buildReviewPacket(
+      {
+        ...baseInput,
+        task: "review_plan",
+        autoDiscoverGit: undefined,
+        includeUntrackedContent: true,
+        redactSecrets: false
+      },
+      {
+        getGitSummary: async () => "Untracked Files\nnotes.md",
+        getGitStatus: async () => "",
+        getGitDiff: async () => "",
+        getUntrackedFileEvidence: async () => [
+          {
+            path: "notes.md",
+            sizeBytes: 15,
+            content: "planning note\n",
+            inclusion: "candidate",
+            reason: "untracked_text"
+          }
+        ]
+      }
+    );
+
+    expect(packet).toContain("## Routed Untracked File Evidence");
+    expect(packet).toContain("planning note");
+  });
+
+  it("disables default untracked body discovery when includeUntrackedContent is false", async () => {
+    let untrackedCalls = 0;
+
+    const packet = await buildReviewPacket(
+      {
+        ...baseInput,
+        autoDiscoverGit: undefined,
+        includeUntrackedContent: false
+      },
+      {
+        getGitSummary: async () => "Untracked Files\n.env",
+        getGitStatus: async () => "? .env",
+        getGitDiff: async () => "",
+        getUntrackedFileEvidence: async () => {
+          untrackedCalls += 1;
+          return [];
+        }
+      }
+    );
+
+    expect(untrackedCalls).toBe(0);
+    expect(packet).not.toContain("## Routed Untracked File Evidence");
+  });
+
+  it("redacts .env-style untracked values before embedding when redactSecrets is true", async () => {
+    const packet = await buildReviewPacket(
+      {
+        ...baseInput,
+        autoDiscoverGit: undefined,
+        redactSecrets: true
+      },
+      {
+        getGitSummary: async () => "Untracked Files\n.env",
+        getGitStatus: async () => "? .env",
+        getGitDiff: async () => "",
+        getUntrackedFileEvidence: async () => [
+          {
+            path: ".env",
+            sizeBytes: 49,
+            content: "DATABASE_URL=postgres://user:pwd@localhost/app\n",
+            inclusion: "candidate",
+            reason: "untracked_text"
+          }
+        ]
+      }
+    );
+
+    expect(packet).toContain("DATABASE_URL=[REDACTED]");
+    expect(packet).not.toContain("postgres://user:pwd@localhost/app");
+    expect(packet).toContain("embedded with redactSecrets=true");
+  });
+
+  it("redacts private key blocks before embedding untracked files", async () => {
+    const privateKey = [
+      "-----BEGIN OPENSSH PRIVATE KEY-----",
+      "b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAA",
+      "-----END OPENSSH PRIVATE KEY-----"
+    ].join("\n");
+    const packet = await buildReviewPacket(
+      {
+        ...baseInput,
+        autoDiscoverGit: undefined,
+        redactSecrets: true
+      },
+      {
+        getGitSummary: async () => "Untracked Files\nid_rsa",
+        getGitStatus: async () => "? id_rsa",
+        getGitDiff: async () => "",
+        getUntrackedFileEvidence: async () => [
+          {
+            path: "id_rsa",
+            sizeBytes: Buffer.byteLength(privateKey, "utf8"),
+            content: privateKey,
+            inclusion: "candidate",
+            reason: "untracked_text"
+          }
+        ]
+      }
+    );
+
+    expect(packet).toContain("[REDACTED PRIVATE KEY BLOCK]");
+    expect(packet).not.toContain("b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAA");
+  });
+
+  it("does not shrink routed git diff output when no untracked files are embedded", async () => {
+    const diff = [
+      "diff --git a/src/foo.ts b/src/foo.ts",
+      "index 1111111..2222222 100644",
+      "--- a/src/foo.ts",
+      "+++ b/src/foo.ts",
+      "@@ -1 +1,2 @@",
+      " const keep = true;",
+      "+export const added = true;"
+    ].join("\n");
+    const deps = {
+      getGitSummary: async () => "Summary",
+      getGitStatus: async () => "M src/foo.ts",
+      getGitDiff: async () => diff,
+      getUntrackedFileEvidence: async () => []
+    };
+
+    const withoutUntracked = await buildReviewPacket(
+      {
+        ...baseInput,
+        autoDiscoverGit: undefined,
+        includeUntrackedContent: false
+      },
+      deps
+    );
+    const withEmptyUntracked = await buildReviewPacket(
+      {
+        ...baseInput,
+        autoDiscoverGit: undefined,
+        includeUntrackedContent: true
+      },
+      deps
+    );
+
+    expect(withEmptyUntracked).toContain("## Routed Git Diff Evidence");
+    expect(withEmptyUntracked).not.toContain("## Routed Untracked File Evidence");
+    expect(withEmptyUntracked).toBe(withoutUntracked);
   });
 
   it("auto-discovers lightweight git summary for review_plan by default", async () => {
@@ -179,7 +434,7 @@ describe("buildReviewPacket", () => {
     expect(packet).toContain("## Git Evidence Summary");
     expect(packet).toContain("Name Status");
     expect(packet).not.toContain("## Optional Git Status");
-    expect(packet).not.toContain("## Optional Git Diff");
+    expect(packet).not.toContain("## Changed Files Manifest");
   });
 
   it("auto-discovers raw git evidence for review_plan when explicitly requested", async () => {
@@ -241,7 +496,7 @@ describe("buildReviewPacket", () => {
     expect(gitCalls).toBe(0);
     expect(packet).not.toContain("## Git Evidence Summary");
     expect(packet).not.toContain("## Optional Git Status");
-    expect(packet).not.toContain("## Optional Git Diff");
+    expect(packet).not.toContain("## Changed Files Manifest");
   });
 
   it("prefers reviewFocus over the backward-compatible prompt alias", async () => {
@@ -264,7 +519,8 @@ describe("buildReviewPacket", () => {
       {
         getGitSummary: async () => "",
         getGitStatus: async () => "",
-        getGitDiff: async () => ""
+        getGitDiff: async () => "",
+        getUntrackedFileEvidence: async () => []
       }
     );
 
@@ -283,6 +539,32 @@ describe("buildReviewPacket", () => {
     expect(packet).not.toContain("sk-test1234567890");
     expect(packet).not.toContain("open sesame");
     expect(packet).toContain("[REDACTED]");
+  });
+
+  it("redacts common uppercase env-style secret variants", async () => {
+    const packet = await buildReviewPacket({
+      ...baseInput,
+      context: [
+        "URL=https://example.invalid/token",
+        "API_KEYS=alpha,beta",
+        "ACCESS_TOKENS=secret-token",
+        "JWT=header.payload.signature",
+        "BEARER=token-value",
+        "AUTH=basic-value",
+        "CONNECTION_STRING=postgres://user:pwd@localhost/app",
+        "PRIVATE_KEY_PEM=-----BEGIN"
+      ].join("\n")
+    });
+
+    expect(packet).not.toContain("https://example.invalid/token");
+    expect(packet).not.toContain("alpha,beta");
+    expect(packet).not.toContain("secret-token");
+    expect(packet).not.toContain("header.payload.signature");
+    expect(packet).not.toContain("token-value");
+    expect(packet).not.toContain("basic-value");
+    expect(packet).not.toContain("postgres://user:pwd@localhost/app");
+    expect(packet).not.toContain("-----BEGIN");
+    expect(packet.match(/\[REDACTED\]/g)?.length).toBeGreaterThanOrEqual(8);
   });
 
   it("limits oversized context and marks truncation", async () => {

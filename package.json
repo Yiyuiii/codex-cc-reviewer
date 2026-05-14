@@ -1,6 +1,6 @@
 {
   "name": "codex-cc-reviewer",
-  "version": "0.2.3",
+  "version": "0.3.0-rc.0",
   "description": "Use Claude Code as an external reviewer from Codex.",
   "homepage": "https://github.com/Yiyuiii/codex-cc-reviewer#readme",
   "bugs": {
@@ -18,6 +18,7 @@
     "dist",
     "prompts",
     "examples",
+    "scripts/research-bg-ab.mjs",
     "AGENTS.md",
     "docs/installation.md",
     "docs/manual-setup.md",
@@ -39,7 +40,8 @@
     "test": "vitest run",
     "verify:release": "npm run typecheck && npm test && npm run build && npm pack --dry-run --json && node dist/index.js --version && node dist/index.js --help",
     "preflight": "npm ci && npm run verify:release",
-    "prepublishOnly": "npm run typecheck && npm test && npm run build"
+    "prepublishOnly": "npm run typecheck && npm test && npm run build",
+    "research:bg-ab": "node scripts/research-bg-ab.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.23.0",

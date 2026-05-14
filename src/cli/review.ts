@@ -21,6 +21,9 @@ export interface LocalReviewOptions {
   includeGitDiff?: boolean;
   includeGitStatus?: boolean;
   autoDiscoverGit?: boolean;
+  includeUntrackedContent?: boolean;
+  redactSecrets?: boolean;
+  maxContextChars?: number | string;
   stream?: boolean;
   includePartialMessages?: boolean;
   includeHookEvents?: boolean;
@@ -37,7 +40,7 @@ export async function runLocalReview(
   options: LocalReviewOptions,
   deps: LocalReviewDeps = {}
 ): Promise<CcReviewOutput> {
-  const input = CcReviewInputSchema.parse(options);
+  const input = CcReviewInputSchema.parse(normalizeReviewOptions(options));
   const runReview = deps.runReview ?? runClaudeReview;
   const write = deps.write ?? ((text: string) => process.stdout.write(text));
   const result = await runReview(input);
@@ -49,4 +52,14 @@ export async function runLocalReview(
   }
 
   return result;
+}
+
+function normalizeReviewOptions(options: LocalReviewOptions): Record<string, unknown> {
+  const normalized: Record<string, unknown> = { ...options };
+
+  if (typeof options.maxContextChars === "string") {
+    normalized.maxContextChars = Number(options.maxContextChars);
+  }
+
+  return normalized;
 }

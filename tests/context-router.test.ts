@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { routeDiffForReview } from "../src/review/context-router.js";
-import { parseUnifiedDiff } from "../src/review/diff-parser.js";
+import { parseUnifiedDiff, type ParsedDiffFile } from "../src/review/diff-parser.js";
 
 describe("routeDiffForReview", () => {
   it("includes small source diffs fully", () => {
@@ -21,11 +21,11 @@ describe("routeDiffForReview", () => {
       path: "src/foo.ts",
       status: "modified",
       inclusion: "full",
-      reason: "source diff within budget"
+      reason: "risk: source; source diff within budget"
     });
     expect(routed.sections[0]).toMatchObject({ path: "src/foo.ts", inclusion: "full" });
     expect(routed.markdown).toContain("## Changed Files Manifest");
-    expect(routed.markdown).toContain("| src/foo.ts | modified | full | +1/-0 | source diff within budget |");
+    expect(routed.markdown).toContain("| src/foo.ts | modified | full | +1/-0 | risk: source; source diff within budget |");
     expect(routed.markdown).toContain("## Context Routing Guidance");
     expect(routed.markdown).toContain("## Routed Git Diff Evidence");
     expect(routed.markdown).toContain("```diff");
@@ -53,7 +53,7 @@ describe("routeDiffForReview", () => {
     expect(routed.manifestRows[0]).toMatchObject({
       path: "src/large.ts",
       inclusion: "partial",
-      reason: "truncated_to_budget"
+      reason: "risk: source; truncated_to_budget"
     });
     expect(routed.markdown).toContain("HEAD-IMPORTANT");
     expect(routed.markdown).toContain("TAIL-IMPORTANT");
@@ -85,11 +85,13 @@ describe("routeDiffForReview", () => {
     const routed = routeDiffForReview(files, { totalBudgetChars: 4_000 });
 
     expect(routed.sections).toHaveLength(0);
-    expect(routed.manifestRows.map((row) => [row.path, row.inclusion, row.reason])).toEqual([
-      ["package-lock.json", "omitted", "generated_or_lockfile"],
-      ["dist/app.js", "omitted", "generated_or_lockfile"],
-      ["assets/logo.png", "omitted", "binary"]
-    ]);
+    expect(routed.manifestRows.map((row) => [row.path, row.inclusion, row.reason])).toEqual(
+      expect.arrayContaining([
+        ["package-lock.json", "omitted", "risk: generated_or_lockfile; omitted"],
+        ["dist/app.js", "omitted", "risk: generated_or_lockfile; omitted"],
+        ["assets/logo.png", "omitted", "risk: binary; omitted"]
+      ])
+    );
     expect(routed.markdown).toContain("No diff bodies were included in the packet.");
   });
 
@@ -112,38 +114,105 @@ describe("routeDiffForReview", () => {
     });
 
     expect(routed.manifestRows).toHaveLength(5);
-    expect(routed.markdown).toContain("| src/file-0.ts | modified | full | +1/-1 | source diff within budget |");
-    expect(routed.markdown).toContain("| src/file-2.ts | modified | full | +1/-1 | source diff within budget |");
+    expect(routed.markdown).toContain("| src/file-0.ts | modified | full | +1/-1 | risk: source; source diff within budget |");
+    expect(routed.markdown).toContain("| src/file-2.ts | modified | full | +1/-1 | risk: source; source diff within budget |");
     expect(routed.markdown).not.toContain("| src/file-4.ts |");
     expect(routed.markdown).toContain("2 additional changed files omitted from the manifest table");
   });
 
-  it("marks later source files as budget_exhausted when earlier files consume the diff body budget", () => {
+  it("marks later equal-priority files as budget_exhausted when earlier files consume the body budget", () => {
+    const routed = routeDiffForReview(
+      [
+        diffFile("src/first.ts", "a".repeat(240)),
+        diffFile("src/second.ts", "b".repeat(240))
+      ],
+      {
+        totalBudgetChars: 160,
+        fullFileMaxChars: 120
+      }
+    );
+
+    expect(routed.manifestRows.at(-1)).toMatchObject({
+      path: "src/second.ts",
+      inclusion: "omitted",
+      reason: "risk: source; budget_exhausted"
+    });
+  });
+
+  it("routes high-risk review infrastructure before lower-risk docs consume the body budget", () => {
     const diff = [
-      "diff --git a/src/first.ts b/src/first.ts",
+      "diff --git a/docs/guide.md b/docs/guide.md",
       "index 1111111..2222222 100644",
-      "--- a/src/first.ts",
-      "+++ b/src/first.ts",
-      "@@ -1 +1,30 @@",
-      ...Array.from({ length: 30 }, (_, index) => `+first-${index}`),
-      "diff --git a/src/second.ts b/src/second.ts",
+      "--- a/docs/guide.md",
+      "+++ b/docs/guide.md",
+      "@@ -1 +1,60 @@",
+      ...Array.from({ length: 60 }, (_, index) => `+doc-${index}`),
+      "diff --git a/src/mcp/server.ts b/src/mcp/server.ts",
       "index 3333333..4444444 100644",
-      "--- a/src/second.ts",
-      "+++ b/src/second.ts",
+      "--- a/src/mcp/server.ts",
+      "+++ b/src/mcp/server.ts",
       "@@ -1 +1 @@",
       "-old",
       "+new"
     ].join("\n");
 
     const routed = routeDiffForReview(parseUnifiedDiff(diff), {
-      totalBudgetChars: 160,
-      fullFileMaxChars: 120
+      totalBudgetChars: 260,
+      fullFileMaxChars: 260
     });
 
-    expect(routed.manifestRows.at(-1)).toMatchObject({
-      path: "src/second.ts",
+    expect(routed.sections[0]).toMatchObject({
+      path: "src/mcp/server.ts",
+      inclusion: "full",
+      reason: "risk: mcp_transport; source diff within budget"
+    });
+    expect(routed.manifestRows.find((row) => row.path === "docs/guide.md")).toMatchObject({
       inclusion: "omitted",
-      reason: "budget_exhausted"
+      reason: "risk: docs; budget_exhausted"
     });
   });
+
+  it("lets directory-prefix classifications win over token classifications", () => {
+    const routed = routeDiffForReview(
+      [
+        diffFile("docs/security.md", "d".repeat(90)),
+        diffFile("src/runner/auth.ts", "a".repeat(90)),
+        diffFile("src/config/permissions.ts", "p".repeat(90))
+      ],
+      { totalBudgetChars: 1_000 }
+    );
+
+    expect(routed.manifestRows.map((row) => [row.path, row.reason])).toEqual([
+      ["src/runner/auth.ts", "risk: claude_runner; source diff within budget"],
+      ["src/config/permissions.ts", "risk: config_surface; source diff within budget"],
+      ["docs/security.md", "risk: security_config; source diff within budget"]
+    ]);
+  });
+
+  it("keeps original order for equal-priority equal-size source files", () => {
+    const routed = routeDiffForReview(
+      [
+        diffFile("src/bravo.ts", "same-size-body"),
+        diffFile("src/alpha.ts", "same-size-body")
+      ],
+      { totalBudgetChars: 1_000 }
+    );
+
+    expect(routed.sections.map((section) => section.path)).toEqual([
+      "src/bravo.ts",
+      "src/alpha.ts"
+    ]);
+  });
 });
+
+function diffFile(path: string, rawBody: string): ParsedDiffFile {
+  return {
+    path,
+    status: "modified",
+    addedLines: 1,
+    deletedLines: 1,
+    binary: false,
+    generated: false,
+    raw: rawBody
+  };
+}

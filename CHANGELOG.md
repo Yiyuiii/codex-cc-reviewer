@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.3.0-rc.0
+
+This release candidate intentionally validates three bundled areas before stable promotion:
+Review Evidence Routing, doctor hardening, and the maintainer background-mode research harness.
+
+- Upgrade note: `review_diff` and `adversarial_review` now embed selected untracked text file bodies by default when git auto-discovery is enabled. This can include local files such as `.env`, `.env.local`, `*.pem`, `id_rsa*`, `kubeconfig`, `.aws/credentials`, or debug dumps when they are untracked and not ignored. Set `includeUntrackedContent: false` to keep untracked files path-only, or set `redactSecrets: true` for best-effort content redaction.
+- Keep `claude -p` as the supported review backend after validating that `claude --bg` can review but does not yet provide an equally stable full-result surface.
+- Add non-fatal `doctor` warnings for Claude Code versions below the validated floor, daemon workers started on a different Claude Code version, and blocked background jobs.
+- Add a maintainer-only `npm run research:bg-ab` harness for future Plan-profile A/B validation of `claude -p` versus `claude --bg`.
+- Add Review Evidence Routing for diff-oriented reviews: risk-priority tracked diff routing, selected untracked text bodies by default, transparent tracked/untracked manifests, and review-quality filters for binary/generated/build/dependency evidence.
+- Add `includeUntrackedContent` and `codex-cc-reviewer preview` so users can disable untracked body embedding or inspect the exact review packet without starting Claude Code.
+
 ## 0.2.3
 
 - Promote release assurance hardening after validating `v0.2.3-rc.0` in a restarted local Codex session.
