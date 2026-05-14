@@ -81,7 +81,7 @@ jobs:
         run: |
           set -euo pipefail
           tag_version="${{ steps.version.outputs.tag_version }}"
-          validation_file=".release-validation/${tag_version}.md"
+          validation_file=".release-validation/v${tag_version}.md"
           echo "validation_file=${validation_file}" >> "$GITHUB_OUTPUT"
           if [[ "${{ steps.channel.outputs.npm_tag }}" != "latest" ]]; then
             exit 0

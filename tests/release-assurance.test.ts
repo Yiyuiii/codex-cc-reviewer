@@ -53,7 +53,7 @@ describe("release assurance configuration", () => {
     expect(workflow).toContain("Verify package version matches tag");
     expect(workflow).toContain("Verify stable release validation evidence");
     expect(workflow).toContain("sed -i 's/\\r$//' \"$validation_file\"");
-    expect(workflow).toContain(".release-validation/${tag_version}.md");
+    expect(workflow).toContain(".release-validation/v${tag_version}.md");
     expect(workflow).toContain("Local-Codex-Smoke: pass");
     expect(workflow).toContain("npm pack --dry-run --json > npm-pack-dry-run.json");
     expect(workflow).toContain("Validate npm pack manifest");
