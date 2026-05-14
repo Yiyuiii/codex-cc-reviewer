@@ -11,18 +11,94 @@
 
 **Codex 实现。Claude 审查。Codex 决定。**
 
-`codex-cc-reviewer` 适合把 Codex 当主要实现 agent、同时希望 Claude Code 在继续推进前审查计划、diff、高风险设计选择和安全敏感变更的开发者。
+`codex-cc-reviewer` 只暴露一个 MCP 工具：`cc_review`。Codex 仍然负责调度和最终决策；Claude Code 在本地作为聚焦的审查者，检查计划、diff、高风险设计选择和安全敏感变更。
 
-它故意保持很窄：
+状态：早期 `0.2.x`。核心流程可用，但项目仍是 pre-1.0，并且会刻意保持很窄。
 
-- 只暴露一个 MCP 工具：`cc_review`
-- Claude Code 作为本地审查子进程运行
-- Codex 仍然负责调度和最终决策
-- 不做泛化的双向 agent bridge
+> **⚠️ 警告：** 默认安装面向可信本地仓库。它会用 `permissionMode: "bypassPermissions"` 配置 Claude Code，并通过 `--dangerously-skip-permissions` 调用它。不要在不可信仓库、共享机器或敏感代码库中直接使用默认配置。更保守的设置见[安全与配置](#安全与配置)。
 
-状态：早期 `0.2.x`。核心流程可用，但项目仍是 pre-1.0，并且会刻意保持聚焦。
+## ⚡ 快速开始
 
-Proof of work：本项目约 99% 由 Codex 开发和维护；Claude Code / Opus 通过 `cc_review` 作为建议性审查者参与。
+前置条件：Node.js 20+、npm、支持 MCP 的 Codex，以及已经在本地完成认证的 Claude Code CLI。使用本工具前，请先交互式运行一次 Claude Code，确保本地认证已经就绪。
+
+```bash
+npm install -g codex-cc-reviewer
+codex-cc-reviewer install
+codex-cc-reviewer doctor
+```
+
+安装后重启 Codex，然后对 Codex 说：
+
+> 实现这个功能前，先调用 `cc_review` 审查计划；实现后，再调用 `cc_review` 审查 diff。Claude 的审查只是建议，请说明哪些发现被接受、拒绝或延后。
+
+替代方式：如果你已经在 Codex 或其他本地 coding agent 里工作，可以粘贴下面的 prompt 让它代你安装。
+
+以下 prompt 保持英文，方便 agent 直接执行：
+
+```text
+Read this README. Then run exactly these commands:
+npm install -g codex-cc-reviewer
+codex-cc-reviewer install
+codex-cc-reviewer doctor
+
+Afterward, verify the MCP config changed as expected and report any files or settings you changed. Do not invent extra setup steps. Do not use sudo.
+```
+
+维护者验证 npm `next` 预发布版本时，可以显式让 Codex 指向该包：
+
+```bash
+npx --prefer-online -y codex-cc-reviewer@next --version
+npx --prefer-online -y codex-cc-reviewer@next install --package-spec codex-cc-reviewer@next
+npx --prefer-online -y codex-cc-reviewer@next doctor
+```
+
+重启 Codex 后，`doctor` 应显示 `codex_cc_reviewer is configured (codex-cc-reviewer@next)`。
+
+如果你希望 Codex 在计划和 diff 阶段自动调用 `cc_review` 做收敛审查，见 [docs/codex-usage.md](docs/codex-usage.md) 和 [examples/codex-global-prompt.md](examples/codex-global-prompt.md)。
+
+## 📋 最小使用示例
+
+| 场景 | 对 Codex 说 |
+| --- | --- |
+| 实现前审查计划 | 编码前调用 `cc_review`，使用 `task: "review_plan"`，让 Claude Code 检查遗漏步骤、风险假设和更简单的替代方案。 |
+| 提交前审查 diff | 最终回复前调用 `cc_review` 审查当前 diff，重点看正确性、回归风险和遗漏测试。 |
+| 安全敏感改动 | 修改 auth 或权限逻辑前，让 Claude Code 审查计划和最终 diff，并使用更保守的 permission mode。 |
+| 文档或架构审查 | 让 Claude Code 审查这份设计文档的歧义、缺乏依据的假设和迁移风险。 |
+| 对抗性审查 | 让 Claude Code 对当前设计做 adversarial review，重点挑战数据丢失、回滚、竞态条件和可靠性。 |
+
+收到审查后的综合建议见 [docs/codex-usage.md](docs/codex-usage.md)。
+
+## 🧭 推荐工作流
+
+这张图展示的是推荐约定，不是本工具强制执行的流水线。`cc_review` 负责审查调用；计划、实现、验证、综合和最终决定仍然由 Codex 完成。
+
+```mermaid
+flowchart TD
+    A["Codex 起草计划"] --> B["cc_review task: review_plan"]
+    B --> C["Claude Code 审查 packet"]
+    C --> D["Codex 综合发现"]
+    D --> E{"接受重要问题？"}
+    E -- "是" --> A
+    E -- "否" --> F["Codex 实现改动"]
+    F --> G["Codex 本地验证"]
+    G --> H["cc_review task: review_diff"]
+    H --> I["Claude Code 审查 diff evidence"]
+    I --> J["Codex 接受、拒绝或延后发现"]
+    J --> K{"接受重要问题？"}
+    K -- "是" --> F
+    K -- "否" --> L["Codex 完成"]
+```
+
+## 🆕 最新变化
+
+最近稳定版重点：
+
+- `v0.2.3`：强化发布保障，加入标准预检、CI/package smoke checks、npm publish 验证，以及最终 `cc_review` 所需证据字段说明。
+- `v0.2.2`：支持 `install --package-spec <spec>`，用于 `@next` 预发布验证，并让 `doctor` 更清楚地显示已配置的 package spec。
+- `v0.2.1`：加入分支感知的发布流程，使用 npm Trusted Publishing provenance，并验证 `next` 预发布通道。
+- `v0.2.0`：为 diff 审查加入 git evidence routing，用 changed-file manifest、routing guidance 和逐文件精选 diff body 取代单个巨大 diff 块。
+
+完整记录见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 为什么
 
@@ -33,13 +109,15 @@ Proof of work：本项目约 99% 由 Codex 开发和维护；Claude Code / Opus 
 - 能看到 Claude Code 做了什么：工具活动、结构化 timeline、transcript 片段、缓存诊断和成本。
 - 给 Claude Code 传递紧凑的 git 证据地图，而不是盲目把所有 diff 字节塞进 packet。
 
+工作证明：本项目约 99% 由 Codex 开发和维护，Claude Code / Opus 通过 `cc_review` 作为建议性审查者参与。
+
 ## Opus 的具体使用场景
 
 这个项目明确偏向 Opus。默认 `model: "opus"` 不是偶然选择：这个 bridge 的价值前提是 Claude Code 的审查信号强到值得消耗 Opus 级别预算。你可以覆盖成其他 Claude Code model，但那不是本项目的核心价值。
 
 截至 2026 年 5 月，真正的动机是一个具体且主观的观察：在作者的 Claude Plan 工作流里，Opus 系列自 Opus 4.6 时代从过去约 200K context 的工作方式被强制切到 1M context 工作方式后，作为连续自主编码 agent 的可靠性明显下降。这个 failure mode 在作者的长时间编码 session 中稳定复现：Opus 可能忘记前面上下文已经得出的结论，没读过代码却推断实现，或者在验证仓库证据之前急于收尾。在形成这个工具需求的那一个月里，实际表现是更多未检查代码的猜测，以及更不稳定的上下文延续。
 
-这并不代表 Opus 没价值，而是说明它更适合被放在别的位置。`codex-cc-reviewer` 把 Claude Code / Opus 额度花在边界清晰的评审任务上：挑战计划、检查 diff、指出遗漏风险、提供亮点。它的输出不需要被完全遵守。Codex 负责保留任务状态、实现、验证，并决定哪些 Opus 发现接受、拒绝或延后。
+这并不代表 Opus 没有价值，而是说明它更适合被放在别的位置。`codex-cc-reviewer` 把 Claude Code / Opus 额度花在边界清晰的评审任务上：挑战计划、检查 diff、指出遗漏风险、提供亮点。它的输出不需要被完全遵守。Codex 负责保留任务状态、实现、验证，并决定哪些 Opus 发现接受、拒绝或延后。
 
 ## 适合谁
 
@@ -73,57 +151,6 @@ Proof of work：本项目约 99% 由 Codex 开发和维护；Claude Code / Opus 
 
 使用本工具前，请先交互式运行一次 Claude Code，确保本地认证已经就绪。
 
-## 快速开始
-
-如果你已经在 Codex 或其他本地 coding agent 里工作，可以让它先读取本 README，然后代你安装：
-
-下面的 prompt 保持英文，方便 agent 直接执行：
-
-```text
-Read this README. Then run exactly these commands:
-npm install -g codex-cc-reviewer
-codex-cc-reviewer install
-codex-cc-reviewer doctor
-
-Afterward, verify the MCP config changed as expected and report any files or settings you changed. Do not invent extra setup steps. Do not use sudo.
-```
-
-手动安装：
-
-```bash
-npm install -g codex-cc-reviewer
-codex-cc-reviewer install
-codex-cc-reviewer doctor
-```
-
-维护者验证 npm `next` 预发布版时，可以显式让 Codex 指向该包：
-
-```bash
-npx --prefer-online -y codex-cc-reviewer@next --version
-npx --prefer-online -y codex-cc-reviewer@next install --package-spec codex-cc-reviewer@next
-npx --prefer-online -y codex-cc-reviewer@next doctor
-```
-
-重启 Codex 后，`doctor` 应显示 `codex_cc_reviewer is configured (codex-cc-reviewer@next)`。
-
-安装后重启 Codex。默认 permission mode 是 `bypassPermissions`；在共享或敏感环境使用前，请先阅读[安全与配置](#安全与配置)。
-
-然后对 Codex 说：
-
-> 实现这个功能前，先调用 `cc_review` 让 Claude Code 审查计划。实现后，再调用 `cc_review` 审查 diff。
-
-预期流程：
-
-1. Codex 起草计划或准备 diff 上下文。
-2. Codex 调用 MCP 工具 `cc_review`。
-3. `codex-cc-reviewer` 在你的本地环境中 headless 启动 Claude Code。
-4. Claude Code 审查 packet 后退出。
-5. Codex 收到一次 MCP 结果，其中包含 Claude 的审查、最近活动、timeline、transcript、缓存、诊断和成本信息（如果 Claude Code 报告了这些信息）。
-
-Codex 应该把这个结果当作审查意见，而不是事实本身。
-
-如果你希望 Codex 在计划和 diff 阶段自动调用 `cc_review` 做收敛审查，见 [docs/codex-usage.md](docs/codex-usage.md) 和 [examples/codex-global-prompt.md](examples/codex-global-prompt.md)。
-
 ## 手动配置 Codex
 
 如果你更想手动配置，把下面内容加入 `~/.codex/config.toml` 或可信项目的 `.codex/config.toml`：
@@ -147,19 +174,22 @@ enabled_tools = ["cc_review"]
 codex-cc-reviewer install --package-spec codex-cc-reviewer@next
 ```
 
+<a id="安全与配置"></a>
+
 ## 安全与配置
 
-默认模式非常强，面向可信本地 owner workflow：
+默认模式非常强，面向可信本地 owner workflow。
 
-- `model`: `opus`
-- `effort`: `max`
-- `permissionMode`: `bypassPermissions`
-- `tools`: `["default"]`，这是 MCP 输入的 canonical 形式；本地 CLI 也接受逗号分隔字符串
-- `stream`: `true`
-- `cacheTtl`: `1h`
-- `redactSecrets`: `false`
-
-当 `permissionMode: "bypassPermissions"` 时，本工具会用 `--dangerously-skip-permissions` 调用 Claude Code。只应在你控制的仓库、VM、dev container 或本地工作区中使用。
+| 配置项 | 默认值 | 作用 | 风险 | 建议 |
+| --- | --- | --- | --- | --- |
+| `model` | `opus` | 把 Claude Code / Opus 预算花在高信号审查上。 | 成本高于小模型。 | 高价值审查保留默认值；只有在成本或延迟更重要时覆盖。 |
+| `effort` | `max` | 推动 Claude Code 做更深的审查。 | 更慢、更贵。 | 发布、安全、架构和复杂 diff 审查建议保留。 |
+| `permissionMode` | `bypassPermissions` | 跳过 Claude Code 的权限门，让已配置的工具 allowlist 可无人值守运行。 | 高风险：会传入 `--dangerously-skip-permissions`。 | 只在你控制的仓库、VM、dev container 或本地工作区使用。 |
+| `tools` | `["default"]` | 选择 Claude Code 的工具 allowlist；MCP 使用 JSON 数组，本地 CLI 也接受逗号分隔字符串。 | 可能扩大审查者可检查或执行的范围。 | 保守审查使用 `["Read", "Grep", "Glob"]`。 |
+| `redactSecrets` | `false` | 尽量保留原始审查证据。 | 敏感内容可能进入 packet。 | 敏感或共享仓库设为 `true`；它只是 best-effort，不是安全边界。 |
+| `stream` | `true` | 捕获 stream-json activity、transcript、diagnostics 和成本信息（如果有报告）。 | 输出更冗长。 | 除非调试不支持流式输出的客户端，否则保持开启。 |
+| `cacheTtl` | `1h` | 提示 Claude Code 在可用时使用 1 小时 prompt cache。 | 缓存报告可能是冷启动或不可用。 | 保持默认；看 cache diagnostics，不要假设一定命中。 |
+| `maxContextChars` | `120000` | 限制可变 review packet 内容块。 | 更大 packet 可能包含更多本地内容并增加成本。 | 窄审查可调低；高价值 diff evidence 审查保留默认。 |
 
 下面是配置示例，不是内置 profile 名称：
 
@@ -171,9 +201,9 @@ codex-cc-reviewer install --package-spec codex-cc-reviewer@next
 
 默认会尽量按原文传递 review packet。`redactSecrets: true` 会启用 best-effort 脱敏，但它并不全面，也可能删除有用证据。
 
-`cc_review` 不再暴露成本或 turn 上限。timeout 仍然保留，但它是防止服务挂死的保护，不是 Claude Code 能力限制。
+`cc_review` 不暴露成本或 turn 上限。Timeout 仍然保留，但它是防止服务挂死的保护，不是 Claude Code 能力限制。
 
-超大的 packet 内容块会从中间截断，同时保留开头和结尾。这样既保留结构和最新证据，又避免 packet 无限制增长。
+超大的 packet 内容块会从中间截断，同时保留开头和结尾。这样既保留结构和最新证据，又避免 packet 无限增长。
 
 ### Git 上下文路由
 
@@ -188,40 +218,6 @@ codex-cc-reviewer install --package-spec codex-cc-reviewer@next
 
 完整安全说明见 [docs/security.md](docs/security.md)。
 
-## 使用场景
-
-### 实现前审查
-
-对 Codex 说：
-
-> 先起草实现计划。编码前调用 `cc_review`，使用 `task: "review_plan"`，让 Claude Code 查找遗漏步骤、风险假设和更简单的替代方案。
-
-### 审查当前 diff
-
-对 Codex 说：
-
-> 最终确认前，让 Claude Code 审查当前 diff。重点关注正确性、回归风险和遗漏测试。
-
-### 对抗性审查
-
-对 Codex 说：
-
-> 让 Claude Code 做 adversarial review。挑战当前设计，尤其关注 auth、数据丢失、回滚、竞态条件和可靠性。
-
-### 安全敏感变更
-
-对 Codex 说：
-
-> 修改 auth 或权限逻辑前，让 Claude Code 审查计划和最终 diff，并使用更保守的 permission mode。
-
-### 审查文档或架构
-
-对 Codex 说：
-
-> 实现前，让 Claude Code 审查这份设计文档，重点找歧义、缺乏依据的假设和迁移风险。
-
-收到审查后的综合建议见 [docs/codex-usage.md](docs/codex-usage.md)。
-
 ## 直接工具输入
 
 MCP server 只暴露一个工具：`cc_review`。
@@ -230,7 +226,7 @@ MCP server 只暴露一个工具：`cc_review`。
 {
   "task": "review_diff",
   "originalGoal": "增加更安全的发布流程。",
-  "reviewFocus": "请重点审查正确性、回归风险和遗漏测试。",
+  "reviewFocus": "重点审查正确性、回归风险和遗漏测试。",
   "codexSummary": "更新了发布文档和 package metadata。",
   "testsRun": ["npm test: passed"],
   "context": "请审阅当前改动。"
@@ -296,7 +292,7 @@ codex-cc-reviewer doctor
 
 常见问题：
 
-- 找不到 `claude`：安装 Claude Code，并确认它在 `PATH` 上。
+- 找不到 `claude`：安装 Claude Code，并确认它在 `PATH` 中。
 - Claude 未认证：交互式运行一次 Claude Code 并完成认证。
 - Codex 配置缺失：运行 `codex-cc-reviewer install`。
 - Codex 没显示工具：修改 MCP 配置后重启 Codex。

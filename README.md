@@ -11,18 +11,92 @@ Use Claude Code as a second-opinion reviewer for Codex via MCP.
 
 **Codex builds. Claude reviews. Codex decides.**
 
-`codex-cc-reviewer` is for developers who use Codex as their main implementation agent but want Claude Code to challenge plans, diffs, risky design choices, and security-sensitive changes before Codex proceeds.
+`codex-cc-reviewer` exposes one MCP tool, `cc_review`. Codex stays the orchestrator and final decision-maker; Claude Code runs locally as a focused reviewer for plans, diffs, risky design choices, and security-sensitive changes.
 
-It is intentionally narrow:
+Status: early `0.2.x`. The core workflow is usable, but the project is still pre-1.0 and intentionally narrow.
 
-- one MCP tool: `cc_review`
-- Claude Code runs as a local reviewer subprocess
-- Codex remains the orchestrator and final decision-maker
-- no broad bidirectional agent bridge
+> **⚠️ WARNING:** The default install is for trusted local repositories. It configures Claude Code with `permissionMode: "bypassPermissions"` and invokes it with `--dangerously-skip-permissions`. Do not use the default configuration directly in untrusted repositories, shared machines, or sensitive codebases. See [Safety And Configuration](#safety-and-configuration) for safer settings.
 
-Status: early `0.2.x`. The core workflow is usable, but the project is still pre-1.0 and intentionally conservative in scope.
+## ⚡ Quickstart
 
-Proof of work: this project is roughly 99% developed and maintained by Codex itself, with Claude Code / Opus used through `cc_review` as an advisory reviewer.
+Prerequisites: Node.js 20+, npm, Codex with MCP support, and a locally authenticated Claude Code CLI. Run Claude Code once interactively before using this tool so local authentication is ready.
+
+```bash
+npm install -g codex-cc-reviewer
+codex-cc-reviewer install
+codex-cc-reviewer doctor
+```
+
+Restart Codex after installation, then ask Codex:
+
+> Before implementing this feature, call `cc_review` to review the plan. After implementation, call `cc_review` again to review the diff. Treat Claude's review as advisory and tell me which findings you accept, reject, or defer.
+
+Alternative: if you are already working inside Codex or another local coding agent, paste this exact prompt:
+
+```text
+Read this README. Then run exactly these commands:
+npm install -g codex-cc-reviewer
+codex-cc-reviewer install
+codex-cc-reviewer doctor
+
+Afterward, verify the MCP config changed as expected and report any files or settings you changed. Do not invent extra setup steps. Do not use sudo.
+```
+
+Maintainers validating an npm `next` prerelease can point Codex at that package explicitly:
+
+```bash
+npx --prefer-online -y codex-cc-reviewer@next --version
+npx --prefer-online -y codex-cc-reviewer@next install --package-spec codex-cc-reviewer@next
+npx --prefer-online -y codex-cc-reviewer@next doctor
+```
+
+After restarting Codex, `doctor` should show `codex_cc_reviewer is configured (codex-cc-reviewer@next)`.
+
+For an automated convergence workflow where Codex calls `cc_review` at plan and diff checkpoints, see [docs/codex-usage.md](docs/codex-usage.md) and [examples/codex-global-prompt.md](examples/codex-global-prompt.md).
+
+## 📋 Minimal Usage Examples
+
+| Scenario | Tell Codex |
+| --- | --- |
+| Review before implementation | Before coding, call `cc_review` with `task: "review_plan"` and ask Claude Code to find missing steps, risky assumptions, and simpler alternatives. |
+| Review the current diff | Before your final reply, call `cc_review` to review the current diff. Focus on correctness, regressions, and missing tests. |
+| Security-sensitive change | Before changing auth or permissions logic, call `cc_review` for the plan and final diff. Use a conservative permission mode. |
+| Docs or architecture review | Ask Claude Code to review this design document for ambiguity, unsupported assumptions, and migration risks. |
+| Adversarial review | Ask Claude Code for an adversarial review of the chosen design, especially around data loss, rollback, race conditions, and reliability. |
+
+For synthesis guidance after a review, see [docs/codex-usage.md](docs/codex-usage.md).
+
+## 🧭 Recommended Workflow
+
+This diagram shows the recommended convention, not a pipeline enforced by the tool. `cc_review` handles the review calls; Codex handles planning, implementation, verification, synthesis, and the final decision.
+
+```mermaid
+flowchart TD
+    A["Codex drafts plan"] --> B["cc_review task: review_plan"]
+    B --> C["Claude Code reviews packet"]
+    C --> D["Codex synthesizes findings"]
+    D --> E{"Accepted material issue?"}
+    E -- "Yes" --> A
+    E -- "No" --> F["Codex implements change"]
+    F --> G["Codex verifies locally"]
+    G --> H["cc_review task: review_diff"]
+    H --> I["Claude Code reviews diff evidence"]
+    I --> J["Codex accepts, rejects, or defers findings"]
+    J --> K{"Accepted material issue?"}
+    K -- "Yes" --> F
+    K -- "No" --> L["Codex finalizes"]
+```
+
+## 🆕 Latest Changes
+
+Recent stable release highlights:
+
+- `v0.2.3`: release assurance hardening, standard preflight checks, CI/package smoke checks, npm publish validation, and documented final `cc_review` evidence requirements.
+- `v0.2.2`: `install --package-spec <spec>` support for `@next` prerelease validation and clearer `doctor` output for configured package specs.
+- `v0.2.1`: branch-aware release flow with npm Trusted Publishing provenance and a validated `next` prerelease channel.
+- `v0.2.0`: git evidence routing for diff reviews with changed-file manifests, routing guidance, and selected per-file diff bodies instead of one monolithic diff block.
+
+Full history: [CHANGELOG.md](CHANGELOG.md).
 
 ## Why
 
@@ -33,7 +107,9 @@ Proof of work: this project is roughly 99% developed and maintained by Codex its
 - See what Claude Code did: tool activity, structured timeline events, transcript snippets, cache diagnostics, and cost.
 - Send Claude Code a compact git evidence map instead of blindly stuffing every diff byte into the packet.
 
-## The Opus case
+Proof of work: this project is roughly 99% developed and maintained by Codex itself, with Claude Code / Opus used through `cc_review` as an advisory reviewer.
+
+## The Opus Case
 
 This project is intentionally Opus-oriented. The default `model: "opus"` is not incidental: the bridge is meant for cases where Claude Code review is valuable enough to spend Opus-level budget. Other Claude Code models may run if you override the model, but they are not the core value proposition.
 
@@ -41,7 +117,7 @@ The motivating observation, as of May 2026, is specific and deliberately subject
 
 That does not make Opus useless. It changes where Opus is most valuable. `codex-cc-reviewer` spends Claude Code / Opus quota on focused review work that does not need to be obeyed wholesale: challenge a plan, inspect a diff, point out missed risks, and provide review highlights. Codex keeps the task state, implements, verifies, and decides which Opus findings to accept, reject, or defer.
 
-## Who this is for
+## Who This Is For
 
 Use this if:
 
@@ -52,7 +128,7 @@ Use this if:
 - You want reviews before coding, before final answers, or before commits.
 - You want Codex to synthesize Claude's feedback instead of blindly accepting it.
 
-## Not for
+## Not For
 
 This is not:
 
@@ -72,55 +148,6 @@ This is not:
 - A trusted local repository, VM, or dev container
 
 Run Claude Code once interactively before using this tool, so local authentication is ready.
-
-## Quickstart
-
-If you are already working inside Codex or another local coding agent, ask it to read this README and run the install for you:
-
-```text
-Read this README. Then run exactly these commands:
-npm install -g codex-cc-reviewer
-codex-cc-reviewer install
-codex-cc-reviewer doctor
-
-Afterward, verify the MCP config changed as expected and report any files or settings you changed. Do not invent extra setup steps. Do not use sudo.
-```
-
-Manual install:
-
-```bash
-npm install -g codex-cc-reviewer
-codex-cc-reviewer install
-codex-cc-reviewer doctor
-```
-
-Restart Codex after installation. The default permission mode is `bypassPermissions`; read [Safety And Configuration](#safety-and-configuration) before using this in shared or sensitive environments.
-
-Maintainers validating an npm `next` prerelease can point Codex at that package explicitly:
-
-```bash
-npx --prefer-online -y codex-cc-reviewer@next --version
-npx --prefer-online -y codex-cc-reviewer@next install --package-spec codex-cc-reviewer@next
-npx --prefer-online -y codex-cc-reviewer@next doctor
-```
-
-After restarting Codex, `doctor` should show `codex_cc_reviewer is configured (codex-cc-reviewer@next)`.
-
-Then ask Codex:
-
-> Before implementing this feature, call `cc_review` to ask Claude Code to review the plan. After implementation, call `cc_review` again to review the diff.
-
-What should happen:
-
-1. Codex drafts the plan or prepares the diff context.
-2. Codex calls the MCP tool `cc_review`.
-3. `codex-cc-reviewer` starts Claude Code headlessly in your local environment.
-4. Claude Code reviews the packet and exits.
-5. Codex receives one MCP result containing Claude's review plus recent activity, timeline, transcript, cache, diagnostics, and cost details when available.
-
-Codex should treat that result as a review opinion, not as ground truth.
-
-For an automated convergence workflow where Codex calls `cc_review` at plan and diff checkpoints, see [docs/codex-usage.md](docs/codex-usage.md) and [examples/codex-global-prompt.md](examples/codex-global-prompt.md).
 
 ## Manual Codex Config
 
@@ -145,26 +172,29 @@ The installer also accepts `--package-spec <spec>` for prerelease testing:
 codex-cc-reviewer install --package-spec codex-cc-reviewer@next
 ```
 
+<a id="safety-and-configuration"></a>
+
 ## Safety And Configuration
 
-The default mode is intentionally powerful. This package is tuned for a trusted local owner workflow:
+The default mode is intentionally powerful. This package is tuned for a trusted local owner workflow.
 
-- `model`: `opus`
-- `effort`: `max`
-- `permissionMode`: `bypassPermissions`
-- `tools`: `["default"]` for MCP input; the local CLI also accepts comma-separated strings
-- `stream`: `true`
-- `cacheTtl`: `1h`
-- `redactSecrets`: `false`
-
-With `permissionMode: "bypassPermissions"`, this server invokes Claude Code with `--dangerously-skip-permissions`. Use that only in repositories, VMs, dev containers, or local workspaces you control.
+| Setting | Default | Role | Risk | Recommendation |
+| --- | --- | --- | --- | --- |
+| `model` | `opus` | Spend Claude Code / Opus budget on high-signal review. | Higher cost than smaller models. | Keep for high-value review; override only when cost or latency matters more than review depth. |
+| `effort` | `max` | Push Claude Code toward deeper review. | Slower and more expensive. | Keep for release, security, architecture, and complex diff review. |
+| `permissionMode` | `bypassPermissions` | Skip Claude Code's permission gate so the configured tool allowlist can run unattended. | High risk: passes `--dangerously-skip-permissions`. | Use only in repositories, VMs, dev containers, or local workspaces you control. |
+| `tools` | `["default"]` | Select Claude Code's tool allowlist; MCP accepts JSON arrays, and the local CLI also accepts comma-separated strings. | May broaden what the reviewer can inspect or execute. | Use `["Read", "Grep", "Glob"]` for conservative read-only review. |
+| `redactSecrets` | `false` | Preserve review evidence faithfully. | Sensitive content can be included in packets. | Set `true` for sensitive or shared repositories; treat it as best-effort only. |
+| `stream` | `true` | Capture stream-json activity, transcript, diagnostics, and cost when reported. | More verbose output. | Keep enabled unless debugging a client that cannot handle streamed output. |
+| `cacheTtl` | `1h` | Hint Claude Code to use the 1-hour prompt cache when available. | Cache reporting can be cold or unavailable. | Keep default; inspect cache diagnostics instead of assuming cache hits. |
+| `maxContextChars` | `120000` | Bound variable review packet blocks. | Larger packets can include more local content and cost more. | Lower for narrow reviews; keep default for high-value diff evidence. |
 
 These are example configurations, not built-in profile names:
 
 | Use case | Suggested fields | Notes |
 | --- | --- | --- |
 | Trusted local owner workflow | `permissionMode: "bypassPermissions"`, `tools: ["default"]`, `redactSecrets: false` | Full-fidelity local workflow for your own repo, VM, or dev container. |
-| Conservative review | `permissionMode: "plan"` or `"default"`, `tools: ["Read", "Grep", "Glob"]`, `redactSecrets: true` | Use for sensitive or shared repositories where review should stay mostly read-only. |
+| Conservative review | `permissionMode: "plan"` or `"default"`, `tools: ["Read", "Grep", "Glob"]`, `redactSecrets: true` | Use for sensitive or shared repositories where review should stay read-only. |
 | Large-context review | default settings, optionally higher `maxContextChars` | Review packets use a large context budget and preserve both the beginning and end of oversized blocks. |
 
 Review packets are sent as faithfully as possible by default. `redactSecrets: true` enables best-effort redaction, but it is not comprehensive and can remove useful evidence.
@@ -173,7 +203,7 @@ Review packets are sent as faithfully as possible by default. `redactSecrets: tr
 
 Oversized packet blocks are truncated from the middle, keeping both the start and the end. This preserves framing and recent evidence while avoiding unbounded packet growth.
 
-### Git context routing
+### Git Context Routing
 
 For `review_diff` and `adversarial_review`, v0.2 routes git evidence instead of inserting one monolithic diff block. The packet includes:
 
@@ -185,40 +215,6 @@ For `review_diff` and `adversarial_review`, v0.2 routes git evidence instead of 
 This is the intended tradeoff: Codex provides a reliable map and enough evidence to start review; Claude Code can spend its own tool calls on files that matter instead of receiving a huge undifferentiated diff dump. Generated paths, lockfiles, dist/build output, and binary diffs are listed in the manifest but omitted from the diff body by default.
 
 See [docs/security.md](docs/security.md) for the full security note.
-
-## Usage Examples
-
-### Review before implementation
-
-Ask Codex:
-
-> Draft the implementation plan first. Before coding, call `cc_review` with `task: "review_plan"` and ask Claude Code to look for missing steps, risky assumptions, and simpler alternatives.
-
-### Review the current diff
-
-Ask Codex:
-
-> Review the current diff with Claude Code before finalizing. Focus on correctness, regressions, and missing tests.
-
-### Adversarial review
-
-Ask Codex:
-
-> Ask Claude Code for an adversarial review. Challenge the chosen design, especially around auth, data loss, rollback, race conditions, and reliability.
-
-### Security-sensitive change
-
-Ask Codex:
-
-> Before changing auth or permissions logic, ask Claude Code to review the plan and then the final diff. Use a conservative permission mode.
-
-### Review docs or architecture
-
-Ask Codex:
-
-> Ask Claude Code to review this design doc for ambiguity, unsupported assumptions, and migration risks before implementation starts.
-
-For synthesis guidance after a review, see [docs/codex-usage.md](docs/codex-usage.md).
 
 ## Direct Tool Input
 
