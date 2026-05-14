@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.1
+
+- Promote `v0.3.1-rc.0` after validating the published npm `next` package in a restarted local Codex session.
+- Confirm the post-restart `review_diff` smoke exercised tracked diff routing, selected untracked text evidence, and best-effort redaction.
+- Keep the documented GitHub Actions Trusted Publishing flow as the only real npm publication path; local npm publishing remains dry-run verification only.
+
 ## 0.3.1-rc.0
 
 - Add raw fallback evidence for non-empty git diffs that cannot be parsed into per-file `diff --git` blocks, preventing silent loss of review evidence.
