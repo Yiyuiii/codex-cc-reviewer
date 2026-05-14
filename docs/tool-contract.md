@@ -71,9 +71,9 @@ While the tool is running, the server sends MCP `notifications/progress` when th
 - `hit`: `cache_read_input_tokens` was greater than zero.
 - `write`: cache creation tokens were reported without read tokens.
 - `miss_or_unreported`: Claude Code did not report cache usage or reported zero cache tokens.
-- `disabled`: the request used `cacheTtl = "5m"` and did not request the 1-hour cache hint.
+- `disabled`: the request used `cacheTtl = "5m"` and did not ask for the 1-hour cache hint.
 
-`disabled` means the 1-hour cache hint was disabled; other reported cache fields can still show 5-minute cache activity.
+`disabled` means the tool did not ask for the 1-hour cache hint; it is not proof of the effective upstream TTL. Other reported cache fields can still show 1-hour or 5-minute cache activity.
 
 These diagnostics reflect Claude Code CLI output, not direct Anthropic API state.
 

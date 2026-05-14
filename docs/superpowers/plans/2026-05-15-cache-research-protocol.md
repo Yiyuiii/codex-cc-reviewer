@@ -40,7 +40,7 @@ For each run, record:
 - `claude --version` for the cell; if it changes mid-protocol, restart the affected cell
 - if `claude --version` is unavailable, record the path or install method and proceed
 
-For `cacheTtl = "5m"`, ignore `cache.effective` and use raw token counts. `effective: "disabled"` only means the 1-hour hint was disabled.
+For `cacheTtl = "5m"`, ignore `cache.effective` and use raw token counts. `effective: "disabled"` only means the request did not ask for the 1-hour hint; it is not proof of the effective upstream TTL.
 
 ## Spend And Stop Rules
 
@@ -172,7 +172,7 @@ Run only if E1/E2 pass and the branch decision depends on TTL rather than packet
 npm run research:cache-repeat -- --runs 2 --stable-lines 200 --dynamic-mode suffix --cache-ttl 5m --timeout-ms 180000
 ```
 
-This immediate comparison cannot prove TTL duration. It only checks whether disabling the 1-hour hint still produces short-interval reads. A default-TTL change requires a later TTL-boundary experiment crossing the 5-minute window.
+This immediate comparison cannot prove TTL duration. It only checks whether not asking for the 1-hour hint changes short-interval reads or reported cache buckets. A default-TTL change requires a later TTL-boundary experiment crossing the 5-minute window.
 
 ## Decision Thresholds
 

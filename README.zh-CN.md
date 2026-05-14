@@ -304,7 +304,7 @@ codex-cc-reviewer doctor
 - 审查超时：增加 Codex config 里的 `tool_timeout_sec`。
 - Codex 只显示一次工具调用但 Claude Code 还在运行：实时 progress 需要 Codex MCP client 发送 `_meta.progressToken`。否则请查看最终 `diagnostics` 和 `activityTail` 字段。
 - Cache reads 一直为 0：第一次运行可能是冷缓存写入，Claude Code 可能没有报告 usage，或者 prompt 低于模型可缓存长度。
-- `cache.inputTokens` 是 Claude Code 报告的 residual uncached input tokens，不是 total input tokens。`cache.effective: "disabled"` 只表示没有请求 1 小时 cache hint；5 分钟 cache 活动仍可能出现在 `cache.cacheCreation`。
+- `cache.inputTokens` 是 Claude Code 报告的 residual uncached input tokens，不是 total input tokens。`cache.effective: "disabled"` 只表示本次请求没有请求 1 小时 cache hint；仍应检查 raw cache fields，因为 Claude Code 仍可能报告 1 小时或 5 分钟 cache 活动。
 
 更多信息见 [docs/troubleshooting.md](docs/troubleshooting.md)。
 

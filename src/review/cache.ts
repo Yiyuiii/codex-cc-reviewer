@@ -74,11 +74,16 @@ export function analyzeCacheUsage(
   cache: Omit<CacheUsage, "effective"> | undefined
 ): CacheAnalysis {
   if (cacheTtl !== "1h") {
-    const diagnostics = ["1-hour cache hint is disabled for this review request."];
+    const diagnostics = ["1-hour cache hint was not requested for this review request."];
     const cacheActivityDetails = formatNonZeroCacheFields(cache);
     if (cacheActivityDetails.length) {
       diagnostics.push(
         `Claude Code still reported cache token activity (${cacheActivityDetails.join(", ")}); inspect the raw cache fields before treating this as no-cache.`
+      );
+    }
+    if ((cache?.cacheCreation?.ephemeral1hInputTokens ?? 0) > 0) {
+      diagnostics.push(
+        "Claude Code reported 1-hour cache creation tokens even though the request did not ask for the 1-hour hint; cacheTtl should be treated as a request hint, not proof of the effective upstream TTL."
       );
     }
 

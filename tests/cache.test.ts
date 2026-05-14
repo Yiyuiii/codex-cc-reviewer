@@ -132,7 +132,28 @@ describe("analyzeCacheUsage", () => {
     expect(zeroUsage.diagnostics.join("\n")).toContain("minimum cacheable prompt length");
   });
 
-  it("marks cache disabled when the request uses 5 minute TTL mode", () => {
+  it("marks cache disabled when the request does not ask for the 1-hour hint", () => {
+    const result = analyzeCacheUsage("5m", {
+      inputTokens: 3,
+      cacheCreation: {
+        ephemeral1hInputTokens: 2000,
+        ephemeral5mInputTokens: 1000
+      }
+    });
+
+    expect(result.cache?.effective).toBe("disabled");
+    expect(result.cache?.inputTokens).toBe(3);
+    expect(result.cache?.cacheCreation?.ephemeral1hInputTokens).toBe(2000);
+    expect(result.cache?.cacheCreation?.ephemeral5mInputTokens).toBe(1000);
+    expect(result.diagnostics.join("\n")).toContain("1-hour cache hint was not requested");
+    expect(result.diagnostics.join("\n")).toContain("still reported cache token activity");
+    expect(result.diagnostics.join("\n")).toContain("inputTokens=3");
+    expect(result.diagnostics.join("\n")).toContain("ephemeral1hInputTokens=2000");
+    expect(result.diagnostics.join("\n")).toContain("ephemeral5mInputTokens=1000");
+    expect(result.diagnostics.join("\n")).toContain("reported 1-hour cache creation tokens");
+  });
+
+  it("does not warn about reported 1-hour cache creation when none is present", () => {
     const result = analyzeCacheUsage("5m", {
       inputTokens: 3,
       cacheCreation: {
@@ -141,11 +162,7 @@ describe("analyzeCacheUsage", () => {
     });
 
     expect(result.cache?.effective).toBe("disabled");
-    expect(result.cache?.inputTokens).toBe(3);
-    expect(result.cache?.cacheCreation?.ephemeral5mInputTokens).toBe(1000);
-    expect(result.diagnostics.join("\n")).toContain("1-hour cache hint is disabled");
-    expect(result.diagnostics.join("\n")).toContain("still reported cache token activity");
-    expect(result.diagnostics.join("\n")).toContain("inputTokens=3");
-    expect(result.diagnostics.join("\n")).toContain("ephemeral5mInputTokens=1000");
+    expect(result.diagnostics.join("\n")).toContain("1-hour cache hint was not requested");
+    expect(result.diagnostics.join("\n")).not.toContain("reported 1-hour cache creation tokens");
   });
 });

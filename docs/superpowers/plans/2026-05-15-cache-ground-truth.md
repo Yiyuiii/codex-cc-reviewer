@@ -311,7 +311,7 @@ Document:
 - `research:cache-repeat` as a maintainer research command
 - packet reorder remains unimplemented until cache ground truth shows it can help
 - publication source of truth remains GitHub workflow, not local npm publish
-- `cache.effective: "disabled"` means the 1-hour hint was not requested; other reported cache fields can still show 5-minute cache activity
+- `cache.effective: "disabled"` means the 1-hour hint was not requested; other reported cache fields can still show 1-hour or 5-minute cache activity
 - `cache.inputTokens` means Claude Code's reported residual uncached input tokens, not total input tokens
 - all added cache sub-fields are optional and backward-compatible
 

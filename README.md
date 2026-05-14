@@ -313,7 +313,7 @@ Common issues:
 - `doctor` warns about Claude Code daemon or blocked background jobs: run `claude agents` and stop stale sessions with `claude stop <id>` before debugging review failures.
 - Codex only shows one tool call while Claude Code is running: real-time progress requires the Codex MCP client to send `_meta.progressToken`. If it does not, check the final `diagnostics` and `activityTail` fields instead.
 - Cache reads stay at zero: the first run may be a cold cache write, Claude Code may not have reported usage, or the prompt may be below the model's minimum cacheable length.
-- `cache.inputTokens` is Claude Code's reported residual uncached input tokens, not total input tokens. `cache.effective: "disabled"` means the 1-hour cache hint was disabled; 5-minute cache activity can still appear in `cache.cacheCreation`.
+- `cache.inputTokens` is Claude Code's reported residual uncached input tokens, not total input tokens. `cache.effective: "disabled"` means this request did not ask for the 1-hour cache hint; inspect raw cache fields because Claude Code can still report 1-hour or 5-minute cache activity.
 
 See [docs/troubleshooting.md](docs/troubleshooting.md) for the full troubleshooting guide.
 

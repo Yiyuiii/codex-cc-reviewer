@@ -5,6 +5,7 @@
 - Extend Claude Code cache diagnostics with residual uncached input tokens and 1-hour/5-minute cache creation buckets when reported.
 - Add a maintainer-only `npm run research:cache-repeat` harness for repeat-call `claude -p` cache experiments without embedding packet content in argv or JSON summaries.
 - Document that packet reorder remains unimplemented until cache ground-truth evidence shows it can materially reduce repeated-call cost.
+- Clarify that `cacheTtl: "5m"` means the tool did not ask for the 1-hour cache hint, not that Claude Code proved the upstream request avoided 1-hour cache activity.
 
 ## 0.3.1
 
