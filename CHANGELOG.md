@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.1
+
+- Promote the branch-aware release workflow after validating `v0.2.1-rc.0` on npm `next`.
+- Publish stable tags from `main` to npm `latest` with GitHub Actions OIDC Trusted Publishing provenance.
+- Keep prerelease validation on `next` before stable promotion.
+
 ## 0.2.1-rc.0
 
 - Add the `next` prerelease branch workflow for validating npm Trusted Publishing before stable releases.
