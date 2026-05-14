@@ -91,7 +91,7 @@ flowchart TD
 
 Recent release highlights:
 
-- `v0.3.0-rc.0`: add Review Evidence Routing with risk-priority tracked diffs, selected untracked text bodies by default for diff reviews, `includeUntrackedContent`, and a `preview` CLI for inspecting packets without starting Claude Code. Keep `claude -p` as the supported review backend.
+- `v0.3.0`: add Review Evidence Routing with risk-priority tracked diffs, selected untracked text bodies by default for diff reviews, `includeUntrackedContent`, and a `preview` CLI for inspecting packets without starting Claude Code. Keep `claude -p` as the supported review backend.
 - `v0.2.3`: release assurance hardening, standard preflight checks, CI/package smoke checks, npm publish validation, and documented final `cc_review` evidence requirements.
 - `v0.2.2`: `install --package-spec <spec>` support for `@next` prerelease validation and clearer `doctor` output for configured package specs.
 - `v0.2.1`: branch-aware release flow with npm Trusted Publishing provenance and a validated `next` prerelease channel.

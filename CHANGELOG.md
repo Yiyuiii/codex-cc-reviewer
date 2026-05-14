@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.0
+
+- Promote Review Evidence Routing after validating `v0.3.0-rc.0` in a restarted local Codex session.
+- Keep `claude -p` as the supported review backend while retaining the maintainer-only background-mode research harness.
+- Include the doctor hardening and release validation evidence from the `0.3.0` release candidate.
+
 ## 0.3.0-rc.0
 
 This release candidate intentionally validates three bundled areas before stable promotion:
