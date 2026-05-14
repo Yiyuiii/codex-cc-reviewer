@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.1-rc.0
+
+- Add the `next` prerelease branch workflow for validating npm Trusted Publishing before stable releases.
+- Route prerelease tags such as `v0.2.1-rc.0` to the npm `next` dist-tag.
+- Add release workflow channel resolution, tag-trigger guard, branch ancestry checks, and explicit npm provenance publishing.
+
 ## 0.2.0
 
 - Add git diff parsing and context routing for diff-oriented reviews.

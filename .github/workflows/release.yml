@@ -46,11 +46,6 @@ jobs:
             echo "required_branch=origin/main" >> "$GITHUB_OUTPUT"
           fi
 
-      - run: npm ci
-      - run: npm run typecheck
-      - run: npm test
-      - run: npm run build
-
       - name: Verify tag ancestry
         shell: bash
         run: |
@@ -63,4 +58,9 @@ jobs:
             exit 1
           fi
 
-      - run: npm publish --provenance --tag "${{ steps.channel.outputs.npm_tag }}" --access public
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+      - run: npm publish --ignore-scripts --provenance --tag "${{ steps.channel.outputs.npm_tag }}" --access public

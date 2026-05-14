@@ -61,15 +61,13 @@ The workflow should use GitHub-hosted runners with:
 - Node 24 or newer
 - npm 11.5.1 or newer
 
-The publish step should avoid accidental traditional-token fallback by clearing `NODE_AUTH_TOKEN`:
+The publish step should explicitly request provenance so npm uses GitHub Actions OIDC Trusted Publishing:
 
 ```yaml
-- run: npm publish --tag "$NPM_TAG"
-  env:
-    NODE_AUTH_TOKEN: ""
+- run: npm publish --ignore-scripts --provenance --tag "$NPM_TAG" --access public
 ```
 
-This does not disable OIDC. It only avoids confusing registry-auth state created by setup-node's npm registry configuration.
+Do not set or clear `NODE_AUTH_TOKEN` for the release job. The workflow should not depend on a long-lived npm token, and `--provenance` is the explicit signal for the trusted-publishing path.
 
 ## v0.2.0 Handling
 

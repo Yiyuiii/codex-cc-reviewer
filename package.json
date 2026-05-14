@@ -1,6 +1,6 @@
 {
   "name": "codex-cc-reviewer",
-  "version": "0.2.0",
+  "version": "0.2.1-rc.0",
   "description": "Use Claude Code as an external reviewer from Codex.",
   "homepage": "https://github.com/Yiyuiii/codex-cc-reviewer#readme",
   "bugs": {
