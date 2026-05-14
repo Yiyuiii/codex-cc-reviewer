@@ -203,7 +203,7 @@ gh run watch <run-id> --repo Yiyuiii/codex-cc-reviewer --exit-status
 ```powershell
 npm view codex-cc-reviewer dist-tags --json
 npm view codex-cc-reviewer@next version
-npx -y codex-cc-reviewer@next --version
+npx --prefer-online -y codex-cc-reviewer@next --version
 ```
 
 Expected prerelease version:
@@ -217,17 +217,17 @@ Expected prerelease version:
 **Files:**
 - No new source files.
 
-- [ ] Install the exact rc package or npm `next` locally:
+- [ ] Verify npm `next` resolves to the expected rc package:
 
 ```powershell
-npm install -g codex-cc-reviewer@next
+npx --prefer-online -y codex-cc-reviewer@next --version
 ```
 
 - [ ] Refresh Codex MCP configuration and run the local diagnostics:
 
 ```powershell
-codex-cc-reviewer install
-codex-cc-reviewer doctor
+npx --prefer-online -y codex-cc-reviewer@next install --package-spec codex-cc-reviewer@next
+npx --prefer-online -y codex-cc-reviewer@next doctor
 ```
 
 - [ ] Restart Codex so it reloads the MCP server package.

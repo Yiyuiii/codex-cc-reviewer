@@ -1,7 +1,12 @@
 import { readTextIfExists } from "../utils/fs.js";
 import { runCommandCheck } from "../utils/exec.js";
 import { writeLine } from "../utils/logger.js";
-import { getDefaultCodexConfigPath, hasCodexReviewerConfig } from "../config/codex.js";
+import {
+  DEFAULT_CODEX_REVIEWER_PACKAGE_SPEC,
+  getConfiguredCodexReviewerPackageSpec,
+  getDefaultCodexConfigPath,
+  hasCodexReviewerConfig
+} from "../config/codex.js";
 
 export interface DoctorResult {
   name: string;
@@ -19,6 +24,12 @@ export async function collectDoctorResults(): Promise<DoctorResult[]> {
   ]);
   const configPath = getDefaultCodexConfigPath();
   const configText = await readTextIfExists(configPath);
+  const hasReviewerConfig = hasCodexReviewerConfig(configText);
+  const configuredPackageSpec = getConfiguredCodexReviewerPackageSpec(configText);
+  const displayedPackageSpec =
+    configuredPackageSpec && configuredPackageSpec !== DEFAULT_CODEX_REVIEWER_PACKAGE_SPEC
+      ? configuredPackageSpec
+      : undefined;
 
   return [
     commandResult("Node", node),
@@ -33,10 +44,10 @@ export async function collectDoctorResults(): Promise<DoctorResult[]> {
     },
     {
       name: "MCP registration",
-      ok: hasCodexReviewerConfig(configText),
-      level: hasCodexReviewerConfig(configText) ? "ok" : "error",
-      detail: hasCodexReviewerConfig(configText)
-        ? "codex_cc_reviewer is configured"
+      ok: hasReviewerConfig,
+      level: hasReviewerConfig ? "ok" : "error",
+      detail: hasReviewerConfig
+        ? `codex_cc_reviewer is configured${displayedPackageSpec ? ` (${displayedPackageSpec})` : ""}`
         : "codex_cc_reviewer is not configured"
     }
   ];

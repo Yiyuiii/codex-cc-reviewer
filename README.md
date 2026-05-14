@@ -96,6 +96,16 @@ codex-cc-reviewer doctor
 
 Restart Codex after installation. The default permission mode is `bypassPermissions`; read [Safety And Configuration](#safety-and-configuration) before using this in shared or sensitive environments.
 
+Maintainers validating an npm `next` prerelease can point Codex at that package explicitly:
+
+```bash
+npx --prefer-online -y codex-cc-reviewer@next --version
+npx --prefer-online -y codex-cc-reviewer@next install --package-spec codex-cc-reviewer@next
+npx --prefer-online -y codex-cc-reviewer@next doctor
+```
+
+After restarting Codex, `doctor` should show `codex_cc_reviewer is configured (codex-cc-reviewer@next)`.
+
 Then ask Codex:
 
 > Before implementing this feature, call `cc_review` to ask Claude Code to review the plan. After implementation, call `cc_review` again to review the diff.
@@ -128,6 +138,12 @@ enabled_tools = ["cc_review"]
 ```
 
 Restart Codex after changing MCP configuration. See [docs/manual-setup.md](docs/manual-setup.md) for the standalone setup note.
+
+The installer also accepts `--package-spec <spec>` for prerelease testing:
+
+```bash
+codex-cc-reviewer install --package-spec codex-cc-reviewer@next
+```
 
 ## Safety And Configuration
 

@@ -13,7 +13,7 @@ const program = new Command();
 program
   .name("codex-cc-reviewer")
   .description("Use Claude Code as an external reviewer from Codex.")
-  .version("0.2.1");
+  .version("0.2.2-rc.0");
 
 program
   .command("serve")
@@ -32,8 +32,9 @@ program
 program
   .command("install")
   .description("Install MCP config into Codex")
-  .action(async () => {
-    await installCodexConfig();
+  .option("--package-spec <spec>", "npm package spec for the MCP server, for example codex-cc-reviewer@next")
+  .action(async (options) => {
+    await installCodexConfig(options);
   });
 
 program

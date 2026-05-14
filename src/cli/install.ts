@@ -1,8 +1,16 @@
-import { installCodexReviewerConfig } from "../config/codex.js";
+import { installCodexReviewerConfig, normalizePackageSpec } from "../config/codex.js";
 import { writeLine } from "../utils/logger.js";
 
-export async function installCodexConfig(): Promise<void> {
-  const configPath = await installCodexReviewerConfig();
+export interface InstallCliOptions {
+  packageSpec?: string;
+}
+
+export async function installCodexConfig(options: InstallCliOptions = {}): Promise<void> {
+  const packageSpec = normalizePackageSpec(options.packageSpec);
+  const configPath = await installCodexReviewerConfig(undefined, {
+    packageSpec
+  });
   writeLine(`Installed codex-cc-reviewer MCP config at ${configPath}`);
+  writeLine(`MCP package spec: ${packageSpec}`);
 }
 

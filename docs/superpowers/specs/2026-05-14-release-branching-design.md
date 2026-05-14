@@ -91,7 +91,7 @@ For prereleases:
 - GitHub Actions CI passes on `next`.
 - Release workflow publishes to npm `next`.
 - `npm view codex-cc-reviewer dist-tags` shows the prerelease under `next`.
-- `npx -y codex-cc-reviewer@next --version` reports the prerelease version.
+- `npx --prefer-online -y codex-cc-reviewer@next --version` reports the prerelease version.
 - The maintainer installs the rc package locally.
 - `codex-cc-reviewer install` and `codex-cc-reviewer doctor` pass locally.
 - Codex is restarted and can call `cc_review` successfully against this repository.

@@ -36,7 +36,7 @@ The release flow is:
 
 1. Publish an rc version from `next` to npm `next`.
 2. Install that exact rc or `@next` locally.
-3. Run `codex-cc-reviewer install` and `codex-cc-reviewer doctor`.
+3. Run `npx --prefer-online -y codex-cc-reviewer@next install --package-spec codex-cc-reviewer@next` and `npx --prefer-online -y codex-cc-reviewer@next doctor`.
 4. Restart Codex.
 5. From Codex, run a real `cc_review` smoke test against this repository.
 6. Promote to `main` only after the local Codex smoke test passes.

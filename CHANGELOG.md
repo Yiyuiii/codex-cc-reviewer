@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.2-rc.0
+
+- Add `install --package-spec <spec>` so prerelease validation can point Codex at `codex-cc-reviewer@next`.
+- Show the configured MCP package spec in `doctor` output when it can be detected.
+- Document the local Codex rc validation flow before stable promotion.
+
 ## 0.2.1
 
 - Promote the branch-aware release workflow after validating `v0.2.1-rc.0` on npm `next`.

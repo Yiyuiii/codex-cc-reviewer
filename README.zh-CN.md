@@ -96,6 +96,16 @@ codex-cc-reviewer install
 codex-cc-reviewer doctor
 ```
 
+维护者验证 npm `next` 预发布版时，可以显式让 Codex 指向该包：
+
+```bash
+npx --prefer-online -y codex-cc-reviewer@next --version
+npx --prefer-online -y codex-cc-reviewer@next install --package-spec codex-cc-reviewer@next
+npx --prefer-online -y codex-cc-reviewer@next doctor
+```
+
+重启 Codex 后，`doctor` 应显示 `codex_cc_reviewer is configured (codex-cc-reviewer@next)`。
+
 安装后重启 Codex。默认 permission mode 是 `bypassPermissions`；在共享或敏感环境使用前，请先阅读[安全与配置](#安全与配置)。
 
 然后对 Codex 说：
@@ -130,6 +140,12 @@ enabled_tools = ["cc_review"]
 ```
 
 修改 MCP 配置后请重启 Codex。更多说明见 [docs/manual-setup.md](docs/manual-setup.md)。
+
+预发布测试时，installer 也支持 `--package-spec <spec>`：
+
+```bash
+codex-cc-reviewer install --package-spec codex-cc-reviewer@next
+```
 
 ## 安全与配置
 
