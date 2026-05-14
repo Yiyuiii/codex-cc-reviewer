@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.3-rc.0
+
+- Add release assurance hardening for CI, npm package verification, release publishing, and local Codex validation evidence.
+- Publish this prerelease to npm `next` for real Codex restart validation before stable promotion.
+
 ## 0.2.3
 
 - Add standard release preflight scripts covering typecheck, tests, build, npm pack dry-run, and CLI smoke checks.
