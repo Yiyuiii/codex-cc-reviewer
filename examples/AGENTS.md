@@ -14,9 +14,24 @@ Default workflow:
 2. Call `cc_review` with `task="review_plan"`.
 3. Update the plan based on accepted findings.
 4. Implement.
-5. Call `cc_review` with `task="review_diff"` and include the git diff.
-6. Apply accepted fixes.
-7. In the final answer, summarize what Claude flagged, what you accepted, and what you rejected.
+5. Run deterministic local verification before diff review.
+6. Call `cc_review` with `task="review_diff"` and include the git diff.
+7. Apply accepted fixes.
+8. In the final answer, summarize what Claude flagged, what you accepted, and what you rejected.
+
+For this repository, the standard preflight is:
+
+```bash
+npm ci
+npm run typecheck
+npm test
+npm run build
+npm pack --dry-run --json
+node dist/index.js --version
+node dist/index.js --help
+```
+
+Pass those results through `testsRun`. Fill `codexSummary` with what changed and `knownRisks` with the risks Codex already sees.
 
 Do not blindly follow Claude. Codex remains responsible for the final answer.
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.3
+
+- Add standard release preflight scripts covering typecheck, tests, build, npm pack dry-run, and CLI smoke checks.
+- Harden CI with concurrency cancellation, job timeout, pack/CLI smoke checks, npm pack manifest validation, and short-lived package evidence artifacts.
+- Harden release publishing with package-version/tag matching, CRLF-tolerant stable local Codex validation evidence, npm publish verification, and GitHub Release creation.
+- Document required `testsRun`, `codexSummary`, and `knownRisks` evidence before final `cc_review` diff reviews.
+
 ## 0.2.2
 
 - Promote `install --package-spec <spec>` after validating `0.2.2-rc.0` in a restarted local Codex session.

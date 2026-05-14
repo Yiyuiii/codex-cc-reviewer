@@ -8,9 +8,14 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     strategy:
       matrix:
@@ -28,4 +33,48 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+      - name: Create npm pack dry-run manifest
+        run: npm pack --dry-run --json > npm-pack-dry-run.json
+      - name: Validate npm pack manifest
+        run: |
+          node <<'NODE'
+          const fs = require("node:fs");
+          const [manifest] = JSON.parse(fs.readFileSync("npm-pack-dry-run.json", "utf8"));
+          const files = new Set(manifest.files.map((file) => file.path.replace(/\\/g, "/")));
+          const required = [
+            "dist/index.js",
+            "prompts/cc-reviewer.md",
+            "prompts/output-json.md",
+            "examples/AGENTS.md",
+            "docs/tool-contract.md",
+            "README.md",
+            "LICENSE"
+          ];
+          const missing = required.filter((path) => !files.has(path));
+          const unexpected = [...files].filter(
+            (path) =>
+              path === ".env" ||
+              path.startsWith(".github/") ||
+              path.startsWith(".release-validation/") ||
+              path.startsWith("src/") ||
+              path.startsWith("tests/") ||
+              path.startsWith("docs/superpowers/")
+          );
+          if (missing.length || unexpected.length) {
+            console.error(JSON.stringify({ missing, unexpected }, null, 2));
+            process.exit(1);
+          }
+          NODE
+      - run: node dist/index.js --version
+      - run: node dist/index.js --help
+
+      - name: Upload package evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-node-${{ matrix.node-version }}-package-evidence
+          path: |
+            npm-pack-dry-run.json
+            dist/
+          if-no-files-found: error
+          retention-days: 7
 

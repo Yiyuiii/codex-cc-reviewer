@@ -37,6 +37,20 @@ For diff reviews, the packet now uses hybrid context routing. Codex sends a chan
 
 `cc_review` does not expose cost or turn caps. Timeout remains as service hang protection, not as a model capability limit.
 
+Before a final diff review, run deterministic local verification and include the exact results in `testsRun`:
+
+```bash
+npm ci
+npm run typecheck
+npm test
+npm run build
+npm pack --dry-run --json
+node dist/index.js --version
+node dist/index.js --help
+```
+
+Populate `codexSummary` with the concrete implementation summary and `knownRisks` with any risks Codex already knows about. The reviewer should not have to infer whether basic build, test, package, and CLI smoke checks ran.
+
 During the tool call, Codex may show real-time progress if its MCP client provides `_meta.progressToken`. If it does not, read the final `activityTail`, `transcriptTail`, and `diagnostics` fields.
 
 After receiving a Claude review, Codex should synthesize rather than blindly accept it. Recommended lightweight packet:
@@ -74,6 +88,8 @@ If you want Codex to call `cc_review` automatically during complex work, add a g
 ```text
 For complex changes, always use the Codex + cc_review (Claude's review) convergence workflow:
 state summary -> plan -> cc_review -> synthesize -> revise until no accepted material improvements remain -> implement -> verify -> cc_review diff -> synthesize patch plan -> repeat until converged.
+
+Before diff review, run the project preflight and pass the exact command results through testsRun. Always fill codexSummary and knownRisks with concrete content.
 
 Claude's review is advisory, not authoritative. Codex must decide and explain Claude's accepted/rejected/deferred findings.
 ```

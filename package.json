@@ -37,6 +37,8 @@
     "build": "tsup src/index.ts --format esm --dts --clean",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "verify:release": "npm run typecheck && npm test && npm run build && npm pack --dry-run --json && node dist/index.js --version && node dist/index.js --help",
+    "preflight": "npm ci && npm run verify:release",
     "prepublishOnly": "npm run typecheck && npm test && npm run build"
   },
   "dependencies": {
