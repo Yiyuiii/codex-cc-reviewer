@@ -22,6 +22,7 @@ This file is for maintainers and agents working on this repository. It is not th
 ## Instruction and Memory Maintenance
 
 - Keep this `AGENTS.md` and related durable project memory up to date as workflows, release gates, validated findings, or maintainer expectations change. Record durable rules promptly in the appropriate repository document instead of relying on chat history.
+- When updating `CHANGELOG.md`, update `CHANGELOG.zh-CN.md` in the same change and summarize the Chinese changelog entry for the maintainer in the final response.
 
 ## Codex + Claude Review Workflow
 
