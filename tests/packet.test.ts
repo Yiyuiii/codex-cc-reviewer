@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import { buildReviewPacket } from "../src/review/packet.js";
-import type { CcReviewInput } from "../src/review/schema.js";
+import { CcReviewInputSchema, type CcReviewInput } from "../src/review/schema.js";
 
 const baseInput: CcReviewInput = {
   task: "review_diff",
+  reviewProfile: "default",
   context: "Please review the diff for correctness.",
   model: "sonnet",
   effort: "high",
@@ -14,6 +15,7 @@ const baseInput: CcReviewInput = {
   includeGitDiff: false,
   includeGitStatus: false,
   autoDiscoverGit: false,
+  includeUntrackedContent: undefined,
   redactSecrets: true,
   maxContextChars: 120_000,
   stream: true,
@@ -63,6 +65,34 @@ describe("buildReviewPacket", () => {
       context: "volatile context"
     });
 
+    expect(packet.indexOf("## Review Instructions")).toBeLessThan(
+      packet.indexOf("## Current Context")
+    );
+  });
+
+  it("does not render a review profile section for default profile packets", async () => {
+    const packet = await buildReviewPacket({
+      ...baseInput,
+      context: "default profile context"
+    });
+
+    expect(packet).not.toContain("## Review Profile");
+  });
+
+  it("renders read_only profile guidance before task context", async () => {
+    const input = CcReviewInputSchema.parse({
+      task: "review_diff",
+      context: "Please review the diff.",
+      reviewProfile: "read_only",
+      autoDiscoverGit: false
+    });
+    const packet = await buildReviewPacket(input);
+
+    expect(packet).toContain("## Review Profile\n\nProfile: read_only");
+    expect(packet.indexOf("## Packet Trust Boundary")).toBeLessThan(
+      packet.indexOf("## Review Profile")
+    );
+    expect(packet.indexOf("## Review Profile")).toBeLessThan(packet.indexOf("## Task Type"));
     expect(packet.indexOf("## Review Instructions")).toBeLessThan(
       packet.indexOf("## Current Context")
     );
@@ -127,6 +157,178 @@ describe("buildReviewPacket", () => {
     expect(packet).toContain("### src/foo.ts");
     expect(packet).toContain("+export const added = true;");
     expect(packet).not.toContain("```diff\n-old\n+new");
+  });
+
+  it("uses read_only tools in routing guidance and slimmer diff bodies", async () => {
+    const diff = largeUnifiedDiff("src/review/profile.ts", 300);
+    const readOnlyPacket = await buildReviewPacket(
+      CcReviewInputSchema.parse({
+        task: "review_diff",
+        context: "Review this read-only profile diff.",
+        reviewProfile: "read_only",
+        autoDiscoverGit: false,
+        includeGitDiff: true
+      }),
+      {
+        getGitSummary: async () => "Summary",
+        getGitDiff: async () => diff
+      }
+    );
+    const defaultPacket = await buildReviewPacket(
+      {
+        ...baseInput,
+        autoDiscoverGit: false,
+        includeGitDiff: true,
+        maxContextChars: 60_000
+      },
+      {
+        getGitSummary: async () => "Summary",
+        getGitDiff: async () => diff
+      }
+    );
+
+    expect(defaultPacket).toContain("| src/review/profile.ts | modified | full |");
+    expect(readOnlyPacket).toContain("| src/review/profile.ts | modified | partial |");
+    expect(readOnlyPacket).toContain("Use the available Claude Code tools (Read, Grep, Glob)");
+    expect(readOnlyPacket).not.toContain("Use Read, Grep, Bash");
+    expect(readOnlyPacket).toContain("[TRUNCATED");
+  });
+
+  it("uses explicit tools overrides in read_only routing guidance", async () => {
+    const packet = await buildReviewPacket(
+      CcReviewInputSchema.parse({
+        task: "review_diff",
+        context: "Review this read-only profile diff.",
+        reviewProfile: "read_only",
+        tools: "Read,Bash(git diff *)",
+        autoDiscoverGit: false,
+        includeGitDiff: true
+      }),
+      {
+        getGitSummary: async () => "Summary",
+        getGitDiff: async () => [
+          "diff --git a/src/review/profile.ts b/src/review/profile.ts",
+          "index 1111111..2222222 100644",
+          "--- a/src/review/profile.ts",
+          "+++ b/src/review/profile.ts",
+          "@@ -1 +1 @@",
+          "-old",
+          "+new"
+        ].join("\n")
+      }
+    );
+
+    expect(packet).toContain(
+      "Use the available Claude Code tools (Read, Bash(git diff *)) to inspect partial or omitted files when they matter."
+    );
+  });
+
+  it("uses explicit tools overrides in default-profile routing guidance", async () => {
+    const packet = await buildReviewPacket(
+      CcReviewInputSchema.parse({
+        task: "review_diff",
+        context: "Review this restricted-tool diff.",
+        tools: "Read,Grep",
+        autoDiscoverGit: false,
+        includeGitDiff: true,
+        includeUntrackedContent: true
+      }),
+      {
+        getGitDiff: async () => [
+          "diff --git a/src/review/profile.ts b/src/review/profile.ts",
+          "index 1111111..2222222 100644",
+          "--- a/src/review/profile.ts",
+          "+++ b/src/review/profile.ts",
+          "@@ -1 +1 @@",
+          "-old",
+          "+new"
+        ].join("\n"),
+        getUntrackedFileEvidence: async () => [
+          {
+            path: "src/review/new-profile.ts",
+            sizeBytes: 24,
+            inclusion: "candidate",
+            reason: "text file",
+            content: "export const fresh = true;\n"
+          }
+        ]
+      }
+    );
+
+    expect(packet).toContain(
+      "Use the available Claude Code tools (Read, Grep) to inspect partial or omitted files when they matter."
+    );
+    expect(packet).not.toContain("Use Read, Grep, Bash");
+  });
+
+  it("falls back to default guidance when read_only explicitly uses default tools", async () => {
+    const packet = await buildReviewPacket(
+      CcReviewInputSchema.parse({
+        task: "review_diff",
+        context: "Review this read-only profile diff.",
+        reviewProfile: "read_only",
+        tools: "default",
+        autoDiscoverGit: false,
+        includeGitDiff: true
+      }),
+      {
+        getGitSummary: async () => "Summary",
+        getGitDiff: async () => [
+          "diff --git a/src/review/profile.ts b/src/review/profile.ts",
+          "index 1111111..2222222 100644",
+          "--- a/src/review/profile.ts",
+          "+++ b/src/review/profile.ts",
+          "@@ -1 +1 @@",
+          "-old",
+          "+new"
+        ].join("\n")
+      }
+    );
+
+    expect(packet).toContain("Use Read, Grep, Bash, or other available Claude Code tools");
+    expect(packet).not.toContain("Use the available Claude Code tools (default)");
+  });
+
+  it("keeps read_only review_diff git discovery while disabling untracked body discovery by default", async () => {
+    let untrackedCalls = 0;
+    const packet = await buildReviewPacket(
+      CcReviewInputSchema.parse({
+        task: "review_diff",
+        context: "Review this read-only diff.",
+        reviewProfile: "read_only"
+      }),
+      {
+        getGitSummary: async () => "Diff Stat\n src/review/profile.ts | 2 +-\nName Status\nM\tsrc/review/profile.ts",
+        getGitStatus: async () => "1 .M N... 100644 100644 100644 abc abc src/review/profile.ts",
+        getGitDiff: async () => [
+          "diff --git a/src/review/profile.ts b/src/review/profile.ts",
+          "index 1111111..2222222 100644",
+          "--- a/src/review/profile.ts",
+          "+++ b/src/review/profile.ts",
+          "@@ -1 +1 @@",
+          "-old",
+          "+new"
+        ].join("\n"),
+        getUntrackedFileEvidence: async () => {
+          untrackedCalls += 1;
+          return [
+            {
+              path: "src/new.ts",
+              sizeBytes: 20,
+              content: "export const x = 1;",
+              inclusion: "candidate",
+              reason: "untracked_text"
+            }
+          ];
+        }
+      }
+    );
+
+    expect(untrackedCalls).toBe(0);
+    expect(packet).toContain("## Optional Git Status");
+    expect(packet).toContain("## Routed Git Diff Evidence");
+    expect(packet).toContain("+new");
+    expect(packet).not.toContain("## Routed Untracked File Evidence");
   });
 
   it("embeds raw fallback evidence when a non-empty diff cannot be parsed", async () => {
@@ -654,6 +856,68 @@ describe("buildReviewPacket", () => {
     expect(packet).not.toContain("## Optional Git Diff");
   });
 
+  it("warns when read_only is used for adversarial review", async () => {
+    const packet = await buildReviewPacket(
+      CcReviewInputSchema.parse({
+        task: "adversarial_review",
+        context: "Review aggressively.",
+        reviewProfile: "read_only",
+        autoDiscoverGit: false
+      })
+    );
+
+    expect(packet).toContain("## Packet Diagnostics");
+    expect(packet).toContain("read_only profile selected for adversarial_review");
+  });
+
+  it("keeps read_only diagnostics actionable under low budgets", async () => {
+    const packet = await buildReviewPacket(
+      CcReviewInputSchema.parse({
+        task: "adversarial_review",
+        context: "Review aggressively.",
+        reviewProfile: "read_only",
+        autoDiscoverGit: false,
+        maxContextChars: 1_000
+      })
+    );
+
+    expect(packet).toContain("Consider reviewProfile=default for high-risk adversarial checks.");
+  });
+
+  it("keeps default-profile diagnostic budgets compact under low budgets", async () => {
+    const packet = await buildReviewPacket(
+      {
+        ...baseInput,
+        context: "c".repeat(2_000),
+        autoDiscoverGit: undefined,
+        maxContextChars: 1_500
+      },
+      {
+        getGitSummary: async () => "",
+        getGitStatus: async () => "",
+        getGitDiff: async () => "",
+        getUntrackedFileEvidence: async () => []
+      }
+    );
+
+    expect(packet).toContain("## Packet Diagnostics");
+    expect(packet).toContain("review_diff requested git evidence");
+    expect(packet.length).toBeLessThan(4_500);
+  });
+
+  it("warns when read_only diff review disables git discovery without evidence", async () => {
+    const packet = await buildReviewPacket(
+      CcReviewInputSchema.parse({
+        task: "review_diff",
+        context: "Review this diff.",
+        reviewProfile: "read_only",
+        autoDiscoverGit: false
+      })
+    );
+
+    expect(packet).toContain("read_only with git auto-discovery disabled and no git evidence");
+  });
+
   it("redacts common secret-shaped values", async () => {
     const packet = await buildReviewPacket({
       ...baseInput,
@@ -737,3 +1001,16 @@ describe("buildReviewPacket", () => {
     expect(packet).toContain("[TRUNCATED");
   });
 });
+
+function largeUnifiedDiff(path: string, addedLines: number): string {
+  return [
+    `diff --git a/${path} b/${path}`,
+    "index 1111111..2222222 100644",
+    `--- a/${path}`,
+    `+++ b/${path}`,
+    `@@ -1 +1,${addedLines + 2} @@`,
+    "+HEAD-IMPORTANT",
+    ...Array.from({ length: addedLines }, (_, index) => `+middle-${index.toString().padStart(4, "0")}: ${"x".repeat(12)}`),
+    "+TAIL-IMPORTANT"
+  ].join("\n");
+}

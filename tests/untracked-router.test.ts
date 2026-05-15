@@ -29,6 +29,9 @@ describe("routeUntrackedForReview", () => {
     expect(routed.markdown).toContain("## Untracked Files Manifest");
     expect(routed.markdown).toContain("| .env | full |");
     expect(routed.markdown).toContain("## Routed Untracked File Evidence");
+    expect(routed.markdown).toContain(
+      "Files marked `omitted` may still contain relevant evidence. Use Read, Grep, Bash, or other available Claude Code tools to inspect them when they matter."
+    );
     expect(routed.markdown).toContain("### .env");
     expect(routed.markdown).toContain("DATABASE_URL=postgres://user:pwd@localhost/app");
   });
@@ -89,6 +92,36 @@ describe("routeUntrackedForReview", () => {
     );
 
     expect(routed.markdown).toContain("````text\nbefore\n```\nafter\n\n````");
+  });
+
+  it("uses explicit available tools in routing guidance when provided", () => {
+    const routed = routeUntrackedForReview(
+      [candidate("src/new-feature.ts", "export const value = 1;\n")],
+      {
+        totalBudgetChars: 4_000,
+        contentRedacted: false,
+        availableTools: ["Read", "Grep", "Glob"]
+      }
+    );
+
+    expect(routed.markdown).toContain(
+      "Use the available Claude Code tools (Read, Grep, Glob) to inspect them when they matter."
+    );
+    expect(routed.markdown).not.toContain("Use Read, Grep, Bash");
+  });
+
+  it("uses default routing guidance for the default tools sentinel", () => {
+    const routed = routeUntrackedForReview(
+      [candidate("src/new-feature.ts", "export const value = 1;\n")],
+      {
+        totalBudgetChars: 4_000,
+        contentRedacted: false,
+        availableTools: ["default"]
+      }
+    );
+
+    expect(routed.markdown).toContain("Use Read, Grep, Bash, or other available Claude Code tools");
+    expect(routed.markdown).not.toContain("Use the available Claude Code tools (default)");
   });
 });
 

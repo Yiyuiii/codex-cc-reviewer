@@ -8,6 +8,7 @@ export interface RouteUntrackedOptions {
   fullFileMaxChars?: number;
   maxManifestRows?: number;
   contentRedacted?: boolean;
+  availableTools?: string[];
 }
 
 export interface RoutedUntrackedManifestRow {
@@ -37,6 +38,12 @@ const DEFAULT_FULL_FILE_MAX_CHARS = 16_000;
 const DEFAULT_MAX_MANIFEST_ROWS = 200;
 const MIN_PARTIAL_CHARS = 120;
 const GENERATED_RANK = 70;
+const DEFAULT_UNTRACKED_ROUTING_GUIDANCE = [
+  "Files marked `full` are included completely in this packet.",
+  "Files marked `partial` preserve the beginning and end of the file; the middle was omitted to keep the packet focused.",
+  "Files marked `omitted` may still contain relevant evidence. Use Read, Grep, Bash, or other available Claude Code tools to inspect them when they matter.",
+  "No file is omitted only because its filename looks sensitive; `redactSecrets=true` controls best-effort content redaction."
+].join("\n");
 
 interface ClassifiedUntrackedFile {
   file: UntrackedFileEvidence;
@@ -82,7 +89,7 @@ export function routeUntrackedForReview(
   return {
     manifestRows,
     sections,
-    markdown: formatUntrackedMarkdown(manifestRows, sections, maxManifestRows)
+    markdown: formatUntrackedMarkdown(manifestRows, sections, maxManifestRows, options.availableTools)
   };
 }
 
@@ -233,7 +240,8 @@ function routeUntrackedFile(
 function formatUntrackedMarkdown(
   manifestRows: RoutedUntrackedManifestRow[],
   sections: RoutedUntrackedSection[],
-  maxManifestRows: number
+  maxManifestRows: number,
+  availableTools?: string[]
 ): string {
   const visibleRows = manifestRows.slice(0, maxManifestRows);
   const omittedManifestRows = Math.max(0, manifestRows.length - visibleRows.length);
@@ -263,15 +271,23 @@ function formatUntrackedMarkdown(
   return [
     manifest.join("\n"),
     "## Untracked Content Routing Guidance",
-    [
-      "Files marked `full` are included completely in this packet.",
-      "Files marked `partial` preserve the beginning and end of the file; the middle was omitted to keep the packet focused.",
-      "Files marked `omitted` may still contain relevant evidence. Use Read, Grep, Bash, or other available Claude Code tools to inspect them when they matter.",
-      "No file is omitted only because its filename looks sensitive; `redactSecrets=true` controls best-effort content redaction."
-    ].join("\n"),
+    formatUntrackedRoutingGuidance(availableTools),
     "## Routed Untracked File Evidence",
     evidence
   ].join("\n\n");
+}
+
+function formatUntrackedRoutingGuidance(availableTools: string[] | undefined): string {
+  if (availableTools === undefined || availableTools.includes("default")) {
+    return DEFAULT_UNTRACKED_ROUTING_GUIDANCE;
+  }
+
+  return [
+    "Files marked `full` are included completely in this packet.",
+    "Files marked `partial` preserve the beginning and end of the file; the middle was omitted to keep the packet focused.",
+    `Files marked \`omitted\` may still contain relevant evidence. Use the available Claude Code tools (${availableTools.join(", ")}) to inspect them when they matter.`,
+    "No file is omitted only because its filename looks sensitive; `redactSecrets=true` controls best-effort content redaction."
+  ].join("\n");
 }
 
 function formatManifestRow(row: RoutedUntrackedManifestRow): string {

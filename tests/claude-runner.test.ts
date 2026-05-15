@@ -10,6 +10,7 @@ import type { CcReviewInput } from "../src/review/schema.js";
 
 const baseInput: CcReviewInput = {
   task: "review_plan",
+  reviewProfile: "default",
   context: "Review this plan.",
   model: "opus",
   effort: "max",
@@ -18,6 +19,7 @@ const baseInput: CcReviewInput = {
   tools: ["default"],
   includeGitDiff: false,
   includeGitStatus: false,
+  includeUntrackedContent: undefined,
   redactSecrets: true,
   maxContextChars: 120_000,
   stream: true,

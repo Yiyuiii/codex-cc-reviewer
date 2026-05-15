@@ -186,21 +186,26 @@ codex-cc-reviewer install --package-spec codex-cc-reviewer@next
 | `model` | `opus` | 把 Claude Code / Opus 预算花在高信号审查上。 | 成本高于小模型。 | 高价值审查保留默认值；只有在成本或延迟更重要时覆盖。 |
 | `effort` | `max` | 推动 Claude Code 做更深的审查。 | 更慢、更贵。 | 发布、安全、架构和复杂 diff 审查建议保留。 |
 | `permissionMode` | `bypassPermissions` | 跳过 Claude Code 的权限门，让已配置的工具 allowlist 可无人值守运行。 | 高风险：会传入 `--dangerously-skip-permissions`。 | 只在你控制的仓库、VM、dev container 或本地工作区使用。 |
+| `reviewProfile` | `default` | 选择审查预设。 | 非默认 profile 会改变 packet 体积和审查者可用工具。 | `read_only` 适合显式选择只读/搜索审查，不适合作为高风险审查默认值。 |
 | `tools` | `["default"]` | 选择 Claude Code 的工具 allowlist；MCP 使用 JSON 数组，本地 CLI 也接受逗号分隔字符串。 | 可能扩大审查者可检查或执行的范围。 | 保守审查使用 `["Read", "Grep", "Glob"]`。 |
 | `redactSecrets` | `false` | 尽量保留原始审查证据。 | 敏感内容可能进入 packet。 | 敏感或共享仓库设为 `true`；它只是 best-effort，不是安全边界。 |
+| `includeUntrackedContent` | `review_diff` 和 `adversarial_review` 默认开启；`reviewProfile: "read_only"` 下省略时默认为 `false` | 在 diff 类 packet 中包含精选 untracked 文本正文。 | 新的本地文本文件可能被发送给 Claude Code。 | 只想列出 untracked 路径时设为 `false`。 |
 | `stream` | `true` | 捕获 stream-json activity、transcript、diagnostics 和成本信息（如果有报告）。 | 输出更冗长。 | 除非调试不支持流式输出的客户端，否则保持开启。 |
 | `cacheTtl` | `1h` | 提示 Claude Code 在可用时使用 1 小时 prompt cache。 | 缓存报告可能是冷启动或不可用。 | 保持默认；看 cache diagnostics，不要假设一定命中。 |
 | `maxContextChars` | `120000` | 限制可变 review packet 内容块。 | 更大 packet 可能包含更多本地内容并增加成本。 | 窄审查可调低；高价值 diff evidence 审查保留默认。 |
 
-下面是配置示例，不是内置 profile 名称：
+下面是常见配置方式：
 
 | 使用场景 | 建议字段 | 说明 |
 | --- | --- | --- |
 | 可信本地 owner workflow | `permissionMode: "bypassPermissions"`、`tools: ["default"]`、`redactSecrets: false` | 适合你自己的仓库、VM 或 dev container，并尽量保留原始审查证据。 |
-| 保守审查 | `permissionMode: "plan"` 或 `"default"`、`tools: ["Read", "Grep", "Glob"]`、`redactSecrets: true` | 适合敏感或共享仓库，让审查尽量保持只读。 |
+| 只读 slim packet 审查 | `reviewProfile: "read_only"`，可选 `redactSecrets: true` | 使用 `Read`、`Grep`、`Glob`，较小 packet 预算，保留精选 tracked diff evidence，并默认只列出 untracked 路径。 |
+| 手动保守审查 | `permissionMode: "plan"` 或 `"default"`、`tools: ["Read", "Grep", "Glob"]`、`redactSecrets: true` | 适合你想逐项控制安全相关字段的场景。 |
 | 大上下文审查 | 默认设置，可选更高的 `maxContextChars` | review packet 使用较大的上下文预算，并在超大内容块中保留开头和结尾。 |
 
 默认会尽量按原文传递 review packet。`redactSecrets: true` 会启用 best-effort 脱敏，但它并不全面，也可能删除有用证据。
+
+`reviewProfile: "read_only"` 会减少嵌入 packet 的正文体积，并把更多调查工作转移给 Claude Code 的工具调用。如果审查者读取很多文件，总成本仍可能上升；它是质量、能力和成本之间的取舍 profile，不是保证更便宜的替代品。如果你在 `read_only` 下显式设置 `tools: ["default"]`，Claude Code 的宽默认工具仍然可用；此时该 profile 主要影响 packet 体积和 evidence routing。`redactSecrets` 只影响嵌入 packet 的证据；工具驱动的 `Read`、`Grep`、`Glob` 会直接检查本地原始文件。
 
 `cc_review` 不暴露成本或 turn 上限。Timeout 仍然保留，但它是防止服务挂死的保护，不是 Claude Code 能力限制。
 
@@ -240,6 +245,12 @@ MCP server 只暴露一个工具：`cc_review`。
 
 ```bash
 codex-cc-reviewer review --task review_plan --review-focus "审查这个计划" --context "..."
+```
+
+只读 slim packet preview：
+
+```bash
+codex-cc-reviewer preview --task review_diff --review-profile read_only --context "Preview the current packet"
 ```
 
 完整输入和输出字段见 [docs/tool-contract.md](docs/tool-contract.md)。

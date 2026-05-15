@@ -11,6 +11,7 @@ describe("runLocalPreview", () => {
     const packet = await runLocalPreview(
       {
         task: "review_diff",
+        reviewProfile: "read_only",
         context: "Preview this change.",
         includeGitDiff: true,
         includeUntrackedContent: false,
@@ -29,6 +30,8 @@ describe("runLocalPreview", () => {
     expect(packet).toBe("# packet\n");
     expect(observed).toMatchObject({
       task: "review_diff",
+      reviewProfile: "read_only",
+      tools: ["Read", "Grep", "Glob"],
       includeGitDiff: true,
       includeUntrackedContent: false,
       redactSecrets: true,

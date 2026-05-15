@@ -4,6 +4,7 @@ import { CcReviewInputSchema, type CcReviewInput, type CcReviewOutput } from "..
 
 export interface LocalReviewOptions {
   task?: string;
+  reviewProfile?: string;
   context?: string;
   prompt?: string;
   originalGoal?: string;

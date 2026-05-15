@@ -7,6 +7,7 @@ export interface RouteDiffOptions {
   totalBudgetChars?: number;
   fullFileMaxChars?: number;
   maxManifestRows?: number;
+  availableTools?: string[];
 }
 
 export interface RoutedDiffManifestRow {
@@ -40,6 +41,12 @@ const DEFAULT_MAX_MANIFEST_ROWS = 200;
 const MIN_PARTIAL_CHARS = 120;
 const GENERATED_RANK = 70;
 const RAW_DIFF_FALLBACK_PATH = "[unparsed-diff]";
+const DEFAULT_CONTEXT_ROUTING_GUIDANCE = [
+  "Files marked `full` are included completely in this packet.",
+  "Files marked `partial` preserve the beginning and end of the diff; the middle was omitted to keep the packet focused.",
+  "Files marked `omitted` may still contain relevant evidence. Use Read, Grep, Bash, or other available Claude Code tools to inspect partial or omitted files when they matter.",
+  "Do not treat omitted evidence as proof that no issue exists."
+].join("\n");
 
 interface ClassifiedDiffFile {
   file: ParsedDiffFile;
@@ -90,7 +97,7 @@ export function routeDiffForReview(
   return {
     manifestRows,
     sections,
-    markdown: formatRoutedDiffMarkdown(manifestRows, sections, maxManifestRows)
+    markdown: formatRoutedDiffMarkdown(manifestRows, sections, maxManifestRows, options.availableTools)
   };
 }
 
@@ -129,7 +136,7 @@ export function routeRawDiffFallbackForReview(
   return {
     manifestRows,
     sections,
-    markdown: formatRoutedDiffMarkdown(manifestRows, sections, maxManifestRows)
+    markdown: formatRoutedDiffMarkdown(manifestRows, sections, maxManifestRows, options.availableTools)
   };
 }
 
@@ -321,7 +328,8 @@ function formatReason(risk: RiskClassification, routeReason: string): string {
 function formatRoutedDiffMarkdown(
   manifestRows: RoutedDiffManifestRow[],
   sections: RoutedDiffSection[],
-  maxManifestRows: number
+  maxManifestRows: number,
+  availableTools?: string[]
 ): string {
   const visibleRows = manifestRows.slice(0, maxManifestRows);
   const omittedManifestRows = Math.max(0, manifestRows.length - visibleRows.length);
@@ -351,15 +359,23 @@ function formatRoutedDiffMarkdown(
   return [
     manifest.join("\n"),
     "## Context Routing Guidance",
-    [
-      "Files marked `full` are included completely in this packet.",
-      "Files marked `partial` preserve the beginning and end of the diff; the middle was omitted to keep the packet focused.",
-      "Files marked `omitted` may still contain relevant evidence. Use Read, Grep, Bash, or other available Claude Code tools to inspect partial or omitted files when they matter.",
-      "Do not treat omitted evidence as proof that no issue exists."
-    ].join("\n"),
+    formatContextRoutingGuidance(availableTools),
     "## Routed Git Diff Evidence",
     evidence
   ].join("\n\n");
+}
+
+function formatContextRoutingGuidance(availableTools: string[] | undefined): string {
+  if (availableTools === undefined || availableTools.includes("default")) {
+    return DEFAULT_CONTEXT_ROUTING_GUIDANCE;
+  }
+
+  return [
+    "Files marked `full` are included completely in this packet.",
+    "Files marked `partial` preserve the beginning and end of the diff; the middle was omitted to keep the packet focused.",
+    `Files marked \`omitted\` may still contain relevant evidence. Use the available Claude Code tools (${availableTools.join(", ")}) to inspect partial or omitted files when they matter.`,
+    "Do not treat omitted evidence as proof that no issue exists."
+  ].join("\n");
 }
 
 function formatManifestRow(row: RoutedDiffManifestRow): string {

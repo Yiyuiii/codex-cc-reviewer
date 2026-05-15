@@ -12,6 +12,7 @@ describe("CcReviewInputSchema", () => {
     expect(parsed.model).toBe("opus");
     expect(parsed.effort).toBe("max");
     expect(parsed.output).toBe("markdown");
+    expect(parsed.reviewProfile).toBe("default");
     expect(parsed.permissionMode).toBe("bypassPermissions");
     expect(parsed.tools).toEqual(["default"]);
     expect(parsed.includeGitDiff).toBe(false);
@@ -73,6 +74,55 @@ describe("CcReviewInputSchema", () => {
     });
 
     expect(parsed.tools).toEqual(["Read", "Bash(git diff *)"]);
+  });
+
+  it("applies read_only review profile defaults only for omitted fields", () => {
+    const parsed = CcReviewInputSchema.parse({
+      task: "review_diff",
+      context: "Review this diff.",
+      reviewProfile: "read_only"
+    });
+
+    expect(parsed.reviewProfile).toBe("read_only");
+    expect(parsed.tools).toEqual(["Read", "Grep", "Glob"]);
+    expect(parsed.maxContextChars).toBe(60_000);
+    expect(parsed.includeUntrackedContent).toBe(false);
+    expect(parsed.autoDiscoverGit).toBeUndefined();
+  });
+
+  it("lets explicit values override read_only profile defaults", () => {
+    const parsed = CcReviewInputSchema.parse({
+      task: "review_diff",
+      context: "Review this diff.",
+      reviewProfile: "read_only",
+      tools: "Read",
+      maxContextChars: 10_000,
+      includeUntrackedContent: true
+    });
+
+    expect(parsed.tools).toEqual(["Read"]);
+    expect(parsed.maxContextChars).toBe(10_000);
+    expect(parsed.includeUntrackedContent).toBe(true);
+  });
+
+  it("rejects empty explicit tool lists", () => {
+    expect(() =>
+      CcReviewInputSchema.parse({
+        task: "review_doc",
+        context: "Review this document.",
+        tools: ""
+      })
+    ).toThrow(/tools must not be empty/i);
+  });
+
+  it("rejects unsupported review profiles", () => {
+    expect(() =>
+      CcReviewInputSchema.parse({
+        task: "review_doc",
+        context: "Review this document.",
+        reviewProfile: "read-only"
+      })
+    ).toThrow();
   });
 
   it("accepts structured review context fields", () => {

@@ -15,27 +15,34 @@ Input:
 - `codexSummary`: optional Codex implementation summary
 - `knownRisks`: optional string or array of risks Codex already knows about
 - `testsRun`: optional string or array of verification commands/results already run
+- `reviewProfile`: `default` or `read_only`; default `default`
 - `model`: default `opus`
 - `effort`: default `max`
 - `output`: `markdown` or `json`
 - `permissionMode`: `acceptEdits`, `auto`, `bypassPermissions`, `default`, `dontAsk`, or `plan`; default `bypassPermissions`
-- `tools`: string or array; default `["default"]`
+- `tools`: string or array; default `["default"]`. With `reviewProfile: "read_only"`, omitted `tools` defaults to `["Read", "Grep", "Glob"]`.
 - `cwd`: optional working directory
 - `includeGitDiff`: default `false`
 - `includeGitStatus`: default `false`
 - `autoDiscoverGit`: optional. When omitted, the packet includes lightweight git summary evidence. `review_diff` and `adversarial_review` also include raw git status and diff evidence.
-- `includeUntrackedContent`: optional. When omitted, `review_diff` and `adversarial_review` include selected untracked text file bodies when git auto-discovery is enabled. `review_plan` and `review_doc` do not embed untracked bodies by default.
+- `includeUntrackedContent`: optional. When omitted, `review_diff` and `adversarial_review` include selected untracked text file bodies when git auto-discovery is enabled. `review_plan` and `review_doc` do not embed untracked bodies by default. With `reviewProfile: "read_only"`, omitted `includeUntrackedContent` defaults to `false`.
 - `stream`: default `true`; uses Claude Code `stream-json`
 - `includePartialMessages`: default `true`
 - `includeHookEvents`: default `true`
 - `verbose`: default `true`
 - `cacheTtl`: `5m` or `1h`; default `1h`
 - `redactSecrets`: default `false`; set `true` for best-effort redaction
-- `maxContextChars`: optional integer, min `1000`, max `1000000`, default `120000`; controls the budget for variable review packet blocks
+- `maxContextChars`: optional integer, min `1000`, max `1000000`, default `120000`; controls the budget for variable review packet blocks. With `reviewProfile: "read_only"`, omitted `maxContextChars` defaults to `60000`.
+
+The MCP-advertised input schema marks `tools`, `includeUntrackedContent`, and `maxContextChars` as optional so the runtime parser can distinguish omitted fields from explicit caller overrides. Runtime defaults are applied after parsing and match the values above.
 
 Unknown input keys are rejected. Removed cost and turn cap fields such as `maxBudgetUsd` and `maxTurns` fail validation instead of being silently ignored.
 
 The runner keeps a 15-minute timeout to prevent hung service calls. This timeout is operational protection, not a Claude Code capability cap.
+
+`reviewProfile: "read_only"` is an opt-in review preset for cost/latency/capability experiments. It narrows Claude Code's default tools to `Read`, `Grep`, and `Glob`, lowers the default packet budget, keeps tracked git diff discovery enabled, disables untracked body embedding by default, and uses smaller per-file body thresholds. It is most useful for `review_diff` and `adversarial_review`, where packet evidence routing can replace large embedded bodies with targeted tool reads. It reduces embedded packet body bytes but shifts more investigation to tool-driven reads, so total cost depends on how many files Claude chooses to inspect. It is not a guaranteed cheaper replacement for the default profile. If callers explicitly set `tools: ["default"]` with `read_only`, broad default Claude Code tools remain available and the profile mainly affects packet sizing and evidence routing.
+
+`read_only` is discouraged for `adversarial_review` when active shell probing or tests matter. The packet includes a diagnostic warning for that combination.
 
 Output:
 
@@ -108,6 +115,8 @@ The router's diff budget governs embedded diff body content. Structural markdown
 Default omitted categories are binary diff blocks, null-byte files, lockfiles, generated package lock output, minified assets, oversized untracked files, symlinks, paths resolving outside the repository root, dependency/vendor/cache output, and common build output paths such as `dist/`, `build/`, `coverage/`, `.next/`, and `node_modules/`. These omissions are packet-routing decisions only; Claude Code still has repository tools available and should inspect omitted files when they may be relevant.
 
 Sensitive-looking filenames such as `.env`, `secret`, or `credential` are not blocked by filename alone. If a selected file is text and passes review-quality filters, it can be embedded. `redactSecrets: true` applies best-effort content redaction before embedding, including common key/token/password and uppercase environment-style assignments, but it is not a security boundary.
+
+`redactSecrets` only applies to evidence embedded in the review packet. Claude Code tool calls such as `Read`, `Grep`, or `Glob` inspect raw local repository files directly; treat the local filesystem and selected tool allowlist as the trust boundary.
 
 The local CLI also provides packet preview without invoking Claude Code:
 

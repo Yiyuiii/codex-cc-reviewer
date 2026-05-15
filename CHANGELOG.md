@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add opt-in `reviewProfile: "read_only"` for read/search-only Claude Code review with slimmer packet routing and explicit tradeoff documentation.
+- Reject empty `tools` arrays or comma-separated strings instead of allowing zero-tool Claude Code invocations.
 - Extend Claude Code cache diagnostics with residual uncached input tokens and 1-hour/5-minute cache creation buckets when reported.
 - Add a maintainer-only `npm run research:cache-repeat` harness for repeat-call `claude -p` cache experiments without embedding packet content in argv or JSON summaries.
 - Document that packet reorder remains unimplemented until cache ground-truth evidence shows it can materially reduce repeated-call cost.

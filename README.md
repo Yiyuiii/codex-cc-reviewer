@@ -184,22 +184,26 @@ The default mode is intentionally powerful. This package is tuned for a trusted 
 | `model` | `opus` | Spend Claude Code / Opus budget on high-signal review. | Higher cost than smaller models. | Keep for high-value review; override only when cost or latency matters more than review depth. |
 | `effort` | `max` | Push Claude Code toward deeper review. | Slower and more expensive. | Keep for release, security, architecture, and complex diff review. |
 | `permissionMode` | `bypassPermissions` | Skip Claude Code's permission gate so the configured tool allowlist can run unattended. | High risk: passes `--dangerously-skip-permissions`. | Use only in repositories, VMs, dev containers, or local workspaces you control. |
+| `reviewProfile` | `default` | Select a review preset. | Non-default profiles change packet size and available reviewer tools. | Use `read_only` for an opt-in read/search profile, not as the default for high-risk reviews. |
 | `tools` | `["default"]` | Select Claude Code's tool allowlist; MCP accepts JSON arrays, and the local CLI also accepts comma-separated strings. | May broaden what the reviewer can inspect or execute. | Use `["Read", "Grep", "Glob"]` for conservative read-only review. |
 | `redactSecrets` | `false` | Preserve review evidence faithfully. | Sensitive content can be included in packets. | Set `true` for sensitive or shared repositories; treat it as best-effort only. |
-| `includeUntrackedContent` | default-on for `review_diff` and `adversarial_review` | Include selected untracked text bodies in diff-oriented packets. | New local text files can be sent to Claude Code. | Set `false` when you only want untracked paths listed. |
+| `includeUntrackedContent` | default-on for `review_diff` and `adversarial_review`; omitted defaults to `false` under `reviewProfile: "read_only"` | Include selected untracked text bodies in diff-oriented packets. | New local text files can be sent to Claude Code. | Set `false` when you only want untracked paths listed. |
 | `stream` | `true` | Capture stream-json activity, transcript, diagnostics, and cost when reported. | More verbose output. | Keep enabled unless debugging a client that cannot handle streamed output. |
 | `cacheTtl` | `1h` | Hint Claude Code to use the 1-hour prompt cache when available. | Cache reporting can be cold or unavailable. | Keep default; inspect cache diagnostics instead of assuming cache hits. |
 | `maxContextChars` | `120000` | Bound variable review packet blocks. | Larger packets can include more local content and cost more. | Lower for narrow reviews; keep default for high-value diff evidence. |
 
-These are example configurations, not built-in profile names:
+These are common configuration patterns:
 
 | Use case | Suggested fields | Notes |
 | --- | --- | --- |
 | Trusted local owner workflow | `permissionMode: "bypassPermissions"`, `tools: ["default"]`, `redactSecrets: false` | Full-fidelity local workflow for your own repo, VM, or dev container. |
-| Conservative review | `permissionMode: "plan"` or `"default"`, `tools: ["Read", "Grep", "Glob"]`, `redactSecrets: true` | Use for sensitive or shared repositories where review should stay read-only. |
+| Read-only slim packet review | `reviewProfile: "read_only"`, optionally `redactSecrets: true` | Uses `Read`, `Grep`, and `Glob`, a smaller packet budget, selected tracked diff evidence, and path-only untracked files by default. |
+| Conservative manual review | `permissionMode: "plan"` or `"default"`, `tools: ["Read", "Grep", "Glob"]`, `redactSecrets: true` | Use when you want to choose each safety-related field yourself. |
 | Large-context review | default settings, optionally higher `maxContextChars` | Review packets use a large context budget and preserve both the beginning and end of oversized blocks. |
 
 Review packets are sent as faithfully as possible by default. `redactSecrets: true` enables best-effort redaction, but it is not comprehensive and can remove useful evidence.
+
+`reviewProfile: "read_only"` reduces embedded packet body bytes and shifts more investigation to Claude Code tool calls. Total cost can still rise if the reviewer performs many reads, so treat it as a quality/capability/cost tradeoff profile rather than a guaranteed cheaper replacement. If you explicitly set `tools: ["default"]` with `read_only`, broad default Claude Code tools remain available; the profile then mainly affects packet sizing and evidence routing. `redactSecrets` only affects packet evidence; tool-driven `Read`, `Grep`, and `Glob` calls inspect raw local files directly.
 
 `cc_review` does not expose cost or turn caps. Timeout remains enabled as service hang protection, not as a model capability limit.
 
@@ -242,6 +246,12 @@ Local CLI test with an optional review focus:
 
 ```bash
 codex-cc-reviewer review --task review_plan --review-focus "Review the plan" --context "..."
+```
+
+Read-only slim packet preview:
+
+```bash
+codex-cc-reviewer preview --task review_diff --review-profile read_only --context "Preview the current packet"
 ```
 
 Preview the packet without invoking Claude Code:

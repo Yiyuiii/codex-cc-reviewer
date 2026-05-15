@@ -30,6 +30,9 @@ describe("routeDiffForReview", () => {
     expect(routed.markdown).toContain("## Changed Files Manifest");
     expect(routed.markdown).toContain("| src/foo.ts | modified | full | +1/-0 | risk: source; source diff within budget |");
     expect(routed.markdown).toContain("## Context Routing Guidance");
+    expect(routed.markdown).toContain(
+      "Files marked `omitted` may still contain relevant evidence. Use Read, Grep, Bash, or other available Claude Code tools to inspect partial or omitted files when they matter."
+    );
     expect(routed.markdown).toContain("## Routed Git Diff Evidence");
     expect(routed.markdown).toContain("```diff");
     expect(routed.markdown).toContain("+export const added = true;");
@@ -205,6 +208,28 @@ describe("routeDiffForReview", () => {
       "src/bravo.ts",
       "src/alpha.ts"
     ]);
+  });
+
+  it("uses explicit available tools in routing guidance when provided", () => {
+    const routed = routeDiffForReview(
+      [diffFile("src/profile.ts", "diff body")],
+      { totalBudgetChars: 1_000, availableTools: ["Read", "Grep", "Glob"] }
+    );
+
+    expect(routed.markdown).toContain(
+      "Use the available Claude Code tools (Read, Grep, Glob) to inspect partial or omitted files when they matter."
+    );
+    expect(routed.markdown).not.toContain("Use Read, Grep, Bash");
+  });
+
+  it("uses default routing guidance for the default tools sentinel", () => {
+    const routed = routeDiffForReview(
+      [diffFile("src/profile.ts", "diff body")],
+      { totalBudgetChars: 1_000, availableTools: ["default"] }
+    );
+
+    expect(routed.markdown).toContain("Use Read, Grep, Bash, or other available Claude Code tools");
+    expect(routed.markdown).not.toContain("Use the available Claude Code tools (default)");
   });
 });
 
