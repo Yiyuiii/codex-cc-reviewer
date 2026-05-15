@@ -2,8 +2,6 @@
 
 ## 未发布
 
-- 新增可选的 `reviewProfile: "read_only"`，用于只读/搜索型 Claude Code 审查，采用更精简的 packet routing，并明确记录相关取舍。
-- 拒绝空的 `tools` 数组或逗号分隔字符串，避免发起零工具的 Claude Code 调用。
 - 扩展 Claude Code cache diagnostics，在 Claude Code 报告时展示剩余未缓存输入 token，以及 1 小时/5 分钟 cache creation buckets。
 - 新增 maintainer-only 的 `npm run research:cache-repeat` harness，用于重复调用 `claude -p` 的 cache 实验，且不把 packet 内容嵌入 argv 或 JSON summary。
 - 记录 packet reorder 仍未实现，直到 cache ground-truth 证据表明它能显著降低重复调用成本。
