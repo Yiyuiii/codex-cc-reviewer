@@ -2,7 +2,16 @@
 
 ## 未发布
 
+- 暂无条目。
+
+## 1.0.0-rc.0
+
+此 release candidate 相比 0.3.1 不引入 breaking behavior 或 API 变更。它开启 1.x 稳定线：受支持的 `cc_review` MCP 输入/输出字段、CLI 命令、package manifest，以及 GitHub Actions 发布流程在 1.x 期间应保持向后兼容，除非未来 changelog 明确标记 breaking change。
+
+- 声明初始 1.0 release candidate，覆盖受支持的 `cc_review` MCP 输入/输出契约、CLI 命令、package manifest，以及 GitHub Actions 发布流程。
+- 将 `codex-cc-reviewer@next` 标记为 1.0.0 release-candidate 线；稳定版 `latest` 提升仍需通过本地 Codex 验证 gate。
 - 扩展 Claude Code cache diagnostics，在 Claude Code 报告时展示剩余未缓存输入 token，以及 1 小时/5 分钟 cache creation buckets。
+- 新增 release assurance 测试，保持 CLI 与 MCP server 版本和 package metadata 对齐。
 - 新增 maintainer-only 的 `npm run research:cache-repeat` harness，用于重复调用 `claude -p` 的 cache 实验，且不把 packet 内容嵌入 argv 或 JSON summary。
 - 记录 packet reorder 仍未实现，直到 cache ground-truth 证据表明它能显著降低重复调用成本。
 - 澄清 `cacheTtl: "5m"` 表示本工具未请求 1 小时 cache hint，并不证明 Claude Code 上游请求没有发生 1 小时 cache 活动。

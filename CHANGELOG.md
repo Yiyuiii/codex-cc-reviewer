@@ -2,7 +2,16 @@
 
 ## Unreleased
 
+- No entries yet.
+
+## 1.0.0-rc.0
+
+This release candidate does not introduce breaking behavior or API changes relative to 0.3.1. It starts the 1.x stability line: supported `cc_review` MCP input/output fields, CLI commands, package manifest, and GitHub Actions publishing flow are expected to remain backward-compatible throughout 1.x unless a future changelog explicitly marks a breaking change.
+
+- Declare the initial 1.0 release candidate for the supported `cc_review` MCP input/output contract, CLI commands, package manifest, and GitHub Actions publishing flow.
+- Mark `codex-cc-reviewer@next` as the 1.0.0 release-candidate line while stable `latest` promotion remains gated by local Codex validation.
 - Extend Claude Code cache diagnostics with residual uncached input tokens and 1-hour/5-minute cache creation buckets when reported.
+- Add a release assurance test that keeps CLI and MCP server versions aligned with package metadata.
 - Add a maintainer-only `npm run research:cache-repeat` harness for repeat-call `claude -p` cache experiments without embedding packet content in argv or JSON summaries.
 - Document that packet reorder remains unimplemented until cache ground-truth evidence shows it can materially reduce repeated-call cost.
 - Clarify that `cacheTtl: "5m"` means the tool did not ask for the 1-hour cache hint, not that Claude Code proved the upstream request avoided 1-hour cache activity.

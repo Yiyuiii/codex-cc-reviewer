@@ -15,6 +15,30 @@ function sliceBetween(value: string, start: string, end: string): string {
 }
 
 describe("release assurance configuration", () => {
+  it("keeps package, CLI, and MCP server versions aligned", async () => {
+    const packageJson = JSON.parse(await readWorkspaceFile("package.json")) as {
+      version: string;
+    };
+    const packageLockJson = JSON.parse(await readWorkspaceFile("package-lock.json")) as {
+      lockfileVersion: number;
+      version: string;
+      packages: { "": { version: string } };
+    };
+    const index = await readWorkspaceFile("src/index.ts");
+    const server = await readWorkspaceFile("src/mcp/server.ts");
+    const cliVersion = index.match(/\.version\("([^"]+)"\)/)?.[1];
+    const mcpServerVersion = server.match(/new McpServer\(\{[^}]*version:\s*"([^"]+)"/s)?.[1];
+
+    expect(packageJson.version).toMatch(/^\d+\.\d+\.\d+(?:-[a-z0-9.]+)?$/);
+    expect(packageLockJson.lockfileVersion).toBe(3);
+    expect(packageLockJson.version).toBe(packageJson.version);
+    expect(packageLockJson.packages[""].version).toBe(packageJson.version);
+    expect(cliVersion).toBe(packageJson.version);
+    expect(mcpServerVersion).toBe(packageJson.version);
+    expect(await readWorkspaceFile("CHANGELOG.md")).toContain(`## ${packageJson.version}`);
+    expect(await readWorkspaceFile("CHANGELOG.zh-CN.md")).toContain(`## ${packageJson.version}`);
+  });
+
   it("exposes local preflight scripts with pack and CLI smoke checks", async () => {
     const packageJson = JSON.parse(await readWorkspaceFile("package.json")) as {
       scripts: Record<string, string>;
