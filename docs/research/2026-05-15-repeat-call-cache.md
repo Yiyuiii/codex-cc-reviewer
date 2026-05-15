@@ -122,6 +122,78 @@ Interpretation:
 - Treat `cacheTtl=5m` as "the tool did not ask for the 1-hour hint", not proof that upstream avoided 1-hour cache activity.
 - No default TTL change is justified from this evidence.
 
+## Exact-Repeat Follow-up
+
+Purpose:
+
+- Close the remaining black-box gap from the first pass: earlier synthetic runs changed the dynamic suffix, so they did not prove what happens when user-controlled content is byte-identical across repeated calls.
+- Avoid contamination from prior 1-hour cache entries by adding a fresh lowercase base36 `--stable-tag` to generated synthetic lines.
+- Record only token and cost summaries. No prompt, stdin, stdout result text, stderr body, or packet body is committed.
+- The stable tag table values are random, non-sensitive cache-bust markers. They are the only stdin- or prompt-embedded literals recorded from these synthetic experiments.
+
+Environment and controls:
+
+- Claude Code version: `2.1.140`
+- `claude -p --help` says `--tools default` uses all built-in tools and `--tools ""` disables all tools.
+- The harness uses `--no-session-persistence`; observed cache reads are therefore upstream prompt-cache behavior, not local Claude Code session resume.
+- Exact-repeat cells use `--dynamic-mode same`. Their run-1 numbers are compared only against their own run-2 numbers, not against earlier `--dynamic-mode suffix` cells.
+- Anthropic's prompt caching documentation describes cache reads/creation as stable-prefix behavior around explicit cache breakpoints, but Claude Code does not expose its internal breakpoint placement. This follow-up remains a Claude Code black-box test. See [Anthropic prompt caching docs](https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching).
+
+Decision thresholds:
+
+- User-content conversion ratio: `(run1.creationInputTokens - run2.creationInputTokens) / run1.creationInputTokens`.
+- Major finding: conversion >= 50%.
+- Weak finding: conversion >= 10% and < 50%.
+- Noise/fail: conversion < 10%, creation unchanged within 5%, or creation increases.
+- Tool-prefix classification: warmed `readInputTokens` movement >= 30% or >= 5,000 tokens across tool sets is material; < 10% is treated as tool-independent; between those is inconclusive.
+
+Exact-repeat stdin results:
+
+| Pair | Stable tag | Run | stableLines | creationInputTokens | readInputTokens | conversion vs run-1 | costUsd |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: |
+| A1 | `fbc4d79cb02827a0` | run-1 | 200 | 26129 | 22717 | n/a | 0.17484475 |
+| A1 | `fbc4d79cb02827a0` | run-2 | 200 | 26126 | 22717 | 0.01% | 0.174826 |
+| A2 | `8fe0299b1391d1fd` | run-1 | 200 | 26129 | 22717 | n/a | 0.17484475 |
+| A2 | `8fe0299b1391d1fd` | run-2 | 200 | 26126 | 22717 | 0.01% | 0.174826 |
+
+Exact-repeat prompt-argument results:
+
+| Pair | Stable tag | Run | stableLines | creationInputTokens | readInputTokens | conversion vs run-1 | costUsd |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: |
+| B1 | `3ce98554178218a5` | run-1 | 200 | 25713 | 22717 | n/a | 0.17224475 |
+| B1 | `3ce98554178218a5` | run-2 | 200 | 25713 | 22717 | 0.00% | 0.17224475 |
+| B2 | `38cfd53b63ee1bee` | run-1 | 200 | 26118 | 22717 | n/a | 0.174776 |
+| B2 | `38cfd53b63ee1bee` | run-2 | 200 | 26119 | 22717 | -0.00% | 0.17478225 |
+
+Tool-prefix classification results:
+
+| Cell | Tools | Stable tag | Run | stableLines | creationInputTokens | readInputTokens | costUsd |
+| --- | --- | --- | --- | ---: | ---: | ---: | ---: |
+| C1 | `Read` | `ca960d5959ec2ac8` | run-1 | 200 | 34910 | 0 | 0.2183675 |
+| C1 | `Read` | `ca960d5959ec2ac8` | run-2 | 200 | 21821 | 13091 | 0.14310675 |
+| C2 | `Read` | `28098b5f5867e921` | run-1 | 1 | 12666 | 13091 | 0.085888 |
+| C2 | `Read` | `28098b5f5867e921` | run-2 | 1 | 12664 | 13091 | 0.0858755 |
+| C3 | `""` | `6b5fcdb7622324f7` | run-1 | 1 | 24852 | 0 | 0.155505 |
+| C3 | `""` | `6b5fcdb7622324f7` | run-2 | 1 | 12668 | 12185 | 0.0854475 |
+| C4 | `default` | `e05e18c6a940a820` | run-1 | 1 | 16971 | 22717 | 0.11760725 |
+| C4 | `default` | `e05e18c6a940a820` | run-2 | 1 | 16971 | 22717 | 0.11760725 |
+
+Interpretation:
+
+- Fresh-tag, byte-identical stdin content failed twice: creation changed by only 3 tokens on both pairs, about 0.01%.
+- Fresh-tag, byte-identical prompt-argument content also failed twice: creation was unchanged or increased by 1 token.
+- The `Read` tool cell warmed from `0` read tokens to `13091` read tokens, but the same `13091` read-token block persisted when stable user content was reduced to 1 line.
+- C2 used a fresh tag after C1 but started with the same `13091` read-token block; that cross-tag reuse is the strongest evidence that the cached block is the Claude Code wrapper/tool prefix, not the synthetic user content.
+- Empty tools warmed to `12185` read tokens with only 1 stable line. `Read` adds about `906` warmed read tokens over that base. `default` showed `22717` read tokens even with only 1 stable line.
+- The default-vs-empty warmed read delta is `10532` tokens, and default-vs-Read is `9626` tokens. Both exceed the material movement threshold.
+
+Follow-up conclusion:
+
+- Exact-repeat user-controlled content did not produce observable cache-read conversion in either stdin or prompt-argument placement.
+- The observed cache savings are dominated by Claude Code's stable prefix and tool catalog, not by `codex-cc-reviewer` packet section order.
+- Keeping model, effort, permission mode, and tool set stable is useful because it preserves prefix-cache reuse. Reordering packet sections is still a dead lever for repeat-call cost in Claude Code `2.1.140`.
+- Remaining cache-mechanism research requires one of: a future Claude Code version that exposes user-content cache hits or changes breakpoint behavior; external HTTP/request-capture capability that can inspect Claude Code cache-control placement; or a direct Anthropic SDK experiment with explicit `cache_control` breakpoints, which exits the Claude Code black-box path.
+
 ## Conclusion
 
 The core repeat-call cache optimization hypothesis was:
@@ -133,7 +205,9 @@ The evidence does not support that hypothesis:
 - Most stable instruction content is already before churn.
 - The only interleaved stable contract block is too small to matter.
 - Synthetic stdin content, synthetic prompt-argument content, and production runner context content all showed repeated cache creation rather than conversion to cache reads.
-- The fixed cache reads likely come from Claude Code's own stable wrapper/tool prefix, not the review packet body.
+- Fresh-tag exact-repeat controls confirmed the same pattern for byte-identical stdin and prompt-argument user content.
+- The fixed cache reads scale materially with Claude Code's tool set: empty tools warmed to 12,185 read tokens, `Read` to 13,091, and `default` to 22,717.
+- The fixed cache reads come from Claude Code's own stable wrapper/tool prefix, not the review packet body.
 - Repeated calls did not materially reduce cost in the measured cells.
 
 Do not implement packet reorder for repeat-call cost. Keep the observability instrumentation and benchmark harness for future Claude Code behavior changes, but close this optimization theme for now.

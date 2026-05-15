@@ -17,10 +17,10 @@ describe("research-cache-repeat helpers", () => {
       "--runs", "3",
       "--stable-lines", "120",
       "--stable-location", "prompt",
+      "--stable-tag", "abc123abc123",
       "--dynamic-mode", "same",
       "--timeout-ms", "5000",
-      "--cache-ttl", "5m",
-      "--packet-file", "packet.md"
+      "--cache-ttl", "5m"
     ])).toMatchObject({
       model: "opus",
       effort: "medium",
@@ -28,10 +28,10 @@ describe("research-cache-repeat helpers", () => {
       runs: 3,
       stableLines: 120,
       stableLocation: "prompt",
+      stableTag: "abc123abc123",
       dynamicMode: "same",
       timeoutMs: 5000,
-      cacheTtl: "5m",
-      packetFile: "packet.md"
+      cacheTtl: "5m"
     });
   });
 
@@ -39,6 +39,87 @@ describe("research-cache-repeat helpers", () => {
     const { parseArgs } = await loadHarness();
 
     expect(() => parseArgs(["--model", "--runs", "2"])).toThrow("--model requires a value");
+    expect(() => parseArgs(["--packet-file", ""])).toThrow("--packet-file requires a value");
+  });
+
+  it("allows an empty tools string for no-tool Claude Code runs", async () => {
+    const { parseArgs } = await loadHarness();
+
+    expect(parseArgs(["--tools", ""])).toMatchObject({ tools: "" });
+  });
+
+  it("rejects unstable tag values and packet-file tag combinations", async () => {
+    const { parseArgs } = await loadHarness();
+
+    expect(() => parseArgs(["--stable-tag", "short"])).toThrow(
+      "--stable-tag must be at least 12 lowercase base36 characters"
+    );
+    expect(() => parseArgs(["--stable-tag", "ABC123ABC123"])).toThrow(
+      "--stable-tag must be at least 12 lowercase base36 characters"
+    );
+    expect(() => parseArgs(["--stable-tag", "abc-123-abc-123"])).toThrow(
+      "--stable-tag must be at least 12 lowercase base36 characters"
+    );
+    expect(() => parseArgs([
+      "--stable-tag", "abc123abc123",
+      "--packet-file", "packet.md"
+    ])).toThrow("--stable-tag cannot be used with --packet-file");
+  });
+
+  it("preserves legacy synthetic text byte-for-byte when stable tag is omitted", async () => {
+    const { buildRunSpec } = await loadHarness();
+    const spec = buildRunSpec({
+      model: "opus",
+      effort: "low",
+      tools: "default",
+      cacheTtl: "1h",
+      stableLocation: "stdin",
+      dynamicMode: "same",
+      stableLines: 2
+    }, 0);
+
+    expect(spec.stdin).toBe([
+      "STATIC CACHE RESEARCH LINE 0000: Keep this line identical across calls.",
+      "STATIC CACHE RESEARCH LINE 0001: Keep this line identical across calls.",
+      "",
+      "DYNAMIC_SUFFIX: same",
+      "Return exactly: OK"
+    ].join("\n"));
+  });
+
+  it("injects stable tags into synthetic lines without putting the stable tag in argv", async () => {
+    const { buildRunSpec } = await loadHarness();
+    const tag = "abc123abc123";
+    const spec = buildRunSpec({
+      model: "opus",
+      effort: "low",
+      tools: "default",
+      cacheTtl: "1h",
+      stableLocation: "stdin",
+      stableTag: tag,
+      dynamicMode: "same",
+      stableLines: 2
+    }, 0);
+
+    expect(spec.stdin).toContain(`STATIC CACHE RESEARCH ${tag} LINE 0000`);
+    expect(spec.stdin).toContain(`STATIC CACHE RESEARCH ${tag} LINE 0001`);
+    expect(spec.args.join(" ")).not.toContain(tag);
+  });
+
+  it("makes same-mode synthetic stdin identical across run indexes", async () => {
+    const { buildRunSpec } = await loadHarness();
+    const options = {
+      model: "opus",
+      effort: "low",
+      tools: "default",
+      cacheTtl: "1h",
+      stableLocation: "stdin",
+      stableTag: "abc123abc123",
+      dynamicMode: "same",
+      stableLines: 2
+    };
+
+    expect(buildRunSpec(options, 0).stdin).toBe(buildRunSpec(options, 1).stdin);
   });
 
   it("builds Claude args and cache env without leaking packet content into argv", async () => {

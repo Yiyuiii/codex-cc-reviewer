@@ -15,6 +15,7 @@ export function parseArgs(args) {
     runs: 2,
     stableLines: DEFAULT_STABLE_LINES,
     stableLocation: "stdin",
+    stableTag: undefined,
     dynamicMode: "suffix",
     timeoutMs: DEFAULT_TIMEOUT_MS,
     cacheTtl: "1h",
@@ -31,7 +32,10 @@ export function parseArgs(args) {
       continue;
     }
 
-    if (requiresValue(arg) && (!next || next.startsWith("--"))) {
+    if (
+      requiresValue(arg) &&
+      (next === undefined || next.startsWith("--") || (arg !== "--tools" && next === ""))
+    ) {
       throw new Error(`${arg} requires a value`);
     }
 
@@ -53,6 +57,9 @@ export function parseArgs(args) {
     } else if (arg === "--stable-location") {
       parsed.stableLocation = parseChoice(next, "--stable-location", ["stdin", "prompt"]);
       index += 1;
+    } else if (arg === "--stable-tag") {
+      parsed.stableTag = parseStableTag(next);
+      index += 1;
     } else if (arg === "--dynamic-mode") {
       parsed.dynamicMode = parseChoice(next, "--dynamic-mode", ["same", "suffix"]);
       index += 1;
@@ -68,6 +75,10 @@ export function parseArgs(args) {
     } else {
       throw new Error(`Unknown option: ${arg}`);
     }
+  }
+
+  if (parsed.packetFile && parsed.stableTag) {
+    throw new Error("--stable-tag cannot be used with --packet-file");
   }
 
   return parsed;
@@ -94,7 +105,7 @@ export function buildClaudeArgs(options, prompt) {
 export function buildRunSpec(options, runIndex, packetContent, baseEnv = process.env) {
   const dynamicSuffix =
     options.dynamicMode === "same" ? "same" : `run-${String(runIndex + 1).padStart(2, "0")}`;
-  const syntheticStable = buildSyntheticStableText(options.stableLines);
+  const syntheticStable = buildSyntheticStableText(options.stableLines, options.stableTag);
   let prompt = "Answer the request provided on stdin. Do not use tools.";
   let stdin;
 
@@ -161,6 +172,7 @@ async function main() {
     runs: options.runs,
     stableLines: packetContent === undefined ? options.stableLines : undefined,
     stableLocation: packetContent === undefined ? options.stableLocation : "packet-file",
+    stableTag: packetContent === undefined ? options.stableTag : undefined,
     dynamicMode: options.dynamicMode,
     cacheTtl: options.cacheTtl,
     packetFile: options.packetFile
@@ -183,6 +195,7 @@ function requiresValue(arg) {
     "--runs",
     "--stable-lines",
     "--stable-location",
+    "--stable-tag",
     "--dynamic-mode",
     "--timeout-ms",
     "--cache-ttl",
@@ -207,10 +220,21 @@ function parseChoice(value, option, choices) {
   return value;
 }
 
-function buildSyntheticStableText(stableLines) {
+function parseStableTag(value) {
+  if (!/^[a-z0-9]{12,}$/.test(value)) {
+    throw new Error("--stable-tag must be at least 12 lowercase base36 characters");
+  }
+
+  return value;
+}
+
+function buildSyntheticStableText(stableLines, stableTag) {
+  const prefix =
+    stableTag === undefined ? "STATIC CACHE RESEARCH" : `STATIC CACHE RESEARCH ${stableTag}`;
+
   return Array.from(
     { length: stableLines },
-    (_, index) => `STATIC CACHE RESEARCH LINE ${String(index).padStart(4, "0")}: Keep this line identical across calls.`
+    (_, index) => `${prefix} LINE ${String(index).padStart(4, "0")}: Keep this line identical across calls.`
   ).join("\n");
 }
 
@@ -349,6 +373,7 @@ function usageText() {
     "  --runs <count>                  Sequential runs, default 2",
     "  --stable-lines <count>          Synthetic stable lines, default 200",
     "  --stable-location <stdin|prompt> Synthetic stable content location, default stdin",
+    "  --stable-tag <tag>              Lowercase base36 tag for synthetic lines; rejected with --packet-file",
     "  --dynamic-mode <same|suffix>    Reuse or mutate dynamic suffix, default suffix",
     "  --cache-ttl <1h|5m>             Prompt cache hint, default 1h",
     "  --packet-file <path>            Read a real preview packet and send it via stdin",
