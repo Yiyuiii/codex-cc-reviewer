@@ -20,7 +20,8 @@ describe("research-cache-repeat helpers", () => {
       "--stable-tag", "abc123abc123",
       "--dynamic-mode", "same",
       "--timeout-ms", "5000",
-      "--cache-ttl", "5m"
+      "--cache-ttl", "5m",
+      "--exclude-dynamic-system-prompt-sections"
     ])).toMatchObject({
       model: "opus",
       effort: "medium",
@@ -31,7 +32,8 @@ describe("research-cache-repeat helpers", () => {
       stableTag: "abc123abc123",
       dynamicMode: "same",
       timeoutMs: 5000,
-      cacheTtl: "5m"
+      cacheTtl: "5m",
+      excludeDynamicSystemPromptSections: true
     });
   });
 
@@ -64,6 +66,28 @@ describe("research-cache-repeat helpers", () => {
       "--stable-tag", "abc123abc123",
       "--packet-file", "packet.md"
     ])).toThrow("--stable-tag cannot be used with --packet-file");
+    expect(() => parseArgs([
+      "--stable-location", "append-system",
+      "--packet-file", "packet.md"
+    ])).toThrow("--stable-location append-system cannot be used with --packet-file");
+  });
+
+  it("caps append-system synthetic bodies before Windows argv limits", async () => {
+    const { parseArgs } = await loadHarness();
+
+    expect(parseArgs([
+      "--stable-location", "append-system",
+      "--stable-tag", "abc123abc123",
+      "--stable-lines", "200"
+    ])).toMatchObject({
+      stableLocation: "append-system",
+      stableLines: 200
+    });
+    expect(() => parseArgs([
+      "--stable-location", "append-system",
+      "--stable-tag", "abc123abc123",
+      "--stable-lines", "300"
+    ])).toThrow("--stable-location append-system generated");
   });
 
   it("preserves legacy synthetic text byte-for-byte when stable tag is omitted", async () => {
@@ -106,6 +130,35 @@ describe("research-cache-repeat helpers", () => {
     expect(spec.args.join(" ")).not.toContain(tag);
   });
 
+  it("places append-system stable text in argv while keeping dynamic suffix on stdin", async () => {
+    const { buildRunSpec } = await loadHarness();
+    const tag = "abc123abc123";
+    const spec = buildRunSpec({
+      model: "opus",
+      effort: "low",
+      tools: "default",
+      cacheTtl: "1h",
+      stableLocation: "append-system",
+      stableTag: tag,
+      dynamicMode: "same",
+      stableLines: 2,
+      excludeDynamicSystemPromptSections: true
+    }, 0);
+    const appendIndex = spec.args.indexOf("--append-system-prompt");
+
+    expect(appendIndex).toBeGreaterThanOrEqual(0);
+    expect(spec.args[appendIndex + 1]).toContain(`STATIC CACHE RESEARCH ${tag} LINE 0000`);
+    expect(spec.args[appendIndex + 1]).toContain(`STATIC CACHE RESEARCH ${tag} LINE 0001`);
+    expect(spec.args.filter((arg: string) => arg === "--append-system-prompt")).toHaveLength(1);
+    expect(spec.args).toContain("--exclude-dynamic-system-prompt-sections");
+    expect(spec.stdin).toBe([
+      "DYNAMIC_SUFFIX: same",
+      "Return exactly: OK"
+    ].join("\n"));
+    expect(spec.stdin).not.toContain("STATIC CACHE RESEARCH");
+    expect(spec.args.join(" ")).not.toContain("DYNAMIC_SUFFIX");
+  });
+
   it("makes same-mode synthetic stdin identical across run indexes", async () => {
     const { buildRunSpec } = await loadHarness();
     const options = {
@@ -120,6 +173,30 @@ describe("research-cache-repeat helpers", () => {
     };
 
     expect(buildRunSpec(options, 0).stdin).toBe(buildRunSpec(options, 1).stdin);
+  });
+
+  it("summarizes append-system benchmark metadata without serializing appended bodies", async () => {
+    const { buildBenchmarkOutput } = await loadHarness();
+    const output = buildBenchmarkOutput({
+      model: "opus",
+      effort: "low",
+      tools: "default",
+      runs: 2,
+      stableLines: 2,
+      stableLocation: "append-system",
+      stableTag: "abc123abc123",
+      dynamicMode: "same",
+      cacheTtl: "1h",
+      excludeDynamicSystemPromptSections: true
+    }, undefined, []);
+    const serialized = JSON.stringify(output);
+
+    expect(output).toMatchObject({
+      stableLocation: "append-system",
+      appendSystemPromptBytes: expect.any(Number),
+      excludeDynamicSystemPromptSections: true
+    });
+    expect(serialized).not.toContain("STATIC CACHE RESEARCH");
   });
 
   it("builds Claude args and cache env without leaking packet content into argv", async () => {
@@ -231,6 +308,30 @@ describe("research-cache-repeat helpers", () => {
     expect(result.stderr).toContain("__codex_cc_reviewer_missing_claude__");
   });
 
+  it("verifies Claude flag support only for requested experimental flags", async () => {
+    const { verifyClaudeFlagSupport } = await loadHarness();
+
+    await expect(verifyClaudeFlagSupport({
+      stableLocation: "stdin",
+      excludeDynamicSystemPromptSections: false
+    }, "claude", async () => {
+      throw new Error("help should not be read");
+    })).resolves.toBeUndefined();
+    await expect(verifyClaudeFlagSupport({
+      stableLocation: "append-system",
+      excludeDynamicSystemPromptSections: true
+    }, "claude", async () => [
+      "Usage: claude [--append-system-prompt <prompt>]",
+      "--exclude-dynamic-system-prompt-sections"
+    ].join("\n"))).resolves.toBeUndefined();
+    await expect(verifyClaudeFlagSupport({
+      stableLocation: "append-system",
+      excludeDynamicSystemPromptSections: true
+    }, "claude", async () => "--append-system-prompt <prompt>")).rejects.toThrow(
+      "Claude help does not advertise required flag(s): --exclude-dynamic-system-prompt-sections"
+    );
+  });
+
   it("marks timed-out child processes without hanging the test", async () => {
     const { runClaude } = await loadHarness();
 
@@ -248,8 +349,10 @@ describe("research-cache-repeat helpers", () => {
     const mod = await loadHarness();
 
     expect(mod).toHaveProperty("parseArgs");
+    expect(mod).toHaveProperty("buildBenchmarkOutput");
     expect(mod).toHaveProperty("buildRunSpec");
     expect(mod).toHaveProperty("summarizeRun");
     expect(mod).toHaveProperty("runClaude");
+    expect(mod).toHaveProperty("verifyClaudeFlagSupport");
   });
 });

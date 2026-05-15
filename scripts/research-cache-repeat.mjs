@@ -6,6 +6,10 @@ import { pathToFileURL } from "node:url";
 
 const DEFAULT_TIMEOUT_MS = 180_000;
 const DEFAULT_STABLE_LINES = 200;
+const APPEND_SYSTEM_STABLE_LOCATION = "append-system";
+const CLAUDE_HELP_TIMEOUT_MS = 15_000;
+// Default append-system bodies are about 18 KiB; 20 KiB leaves argv headroom on Windows.
+const MAX_APPEND_SYSTEM_BODY_BYTES = 20 * 1024;
 
 export function parseArgs(args) {
   const parsed = {
@@ -20,6 +24,7 @@ export function parseArgs(args) {
     timeoutMs: DEFAULT_TIMEOUT_MS,
     cacheTtl: "1h",
     packetFile: undefined,
+    excludeDynamicSystemPromptSections: false,
     help: false
   };
 
@@ -55,7 +60,11 @@ export function parseArgs(args) {
       parsed.stableLines = parsePositiveInt(next, "--stable-lines");
       index += 1;
     } else if (arg === "--stable-location") {
-      parsed.stableLocation = parseChoice(next, "--stable-location", ["stdin", "prompt"]);
+      parsed.stableLocation = parseChoice(next, "--stable-location", [
+        "stdin",
+        "prompt",
+        APPEND_SYSTEM_STABLE_LOCATION
+      ]);
       index += 1;
     } else if (arg === "--stable-tag") {
       parsed.stableTag = parseStableTag(next);
@@ -72,6 +81,8 @@ export function parseArgs(args) {
     } else if (arg === "--packet-file") {
       parsed.packetFile = next;
       index += 1;
+    } else if (arg === "--exclude-dynamic-system-prompt-sections") {
+      parsed.excludeDynamicSystemPromptSections = true;
     } else {
       throw new Error(`Unknown option: ${arg}`);
     }
@@ -81,11 +92,24 @@ export function parseArgs(args) {
     throw new Error("--stable-tag cannot be used with --packet-file");
   }
 
+  if (parsed.packetFile && parsed.stableLocation === APPEND_SYSTEM_STABLE_LOCATION) {
+    throw new Error("--stable-location append-system cannot be used with --packet-file");
+  }
+
+  if (parsed.stableLocation === APPEND_SYSTEM_STABLE_LOCATION) {
+    const appendSystemBytes = byteLength(buildSyntheticStableText(parsed.stableLines, parsed.stableTag));
+    if (appendSystemBytes > MAX_APPEND_SYSTEM_BODY_BYTES) {
+      throw new Error(
+        `--stable-location append-system generated ${appendSystemBytes} bytes; maximum is ${MAX_APPEND_SYSTEM_BODY_BYTES}`
+      );
+    }
+  }
+
   return parsed;
 }
 
-export function buildClaudeArgs(options, prompt) {
-  return [
+export function buildClaudeArgs(options, prompt, appendSystemPrompt) {
+  const args = [
     "-p",
     prompt,
     "--model",
@@ -100,6 +124,16 @@ export function buildClaudeArgs(options, prompt) {
     "json",
     "--no-session-persistence"
   ];
+
+  if (appendSystemPrompt !== undefined) {
+    args.push("--append-system-prompt", appendSystemPrompt);
+  }
+
+  if (options.excludeDynamicSystemPromptSections) {
+    args.push("--exclude-dynamic-system-prompt-sections");
+  }
+
+  return args;
 }
 
 export function buildRunSpec(options, runIndex, packetContent, baseEnv = process.env) {
@@ -108,10 +142,14 @@ export function buildRunSpec(options, runIndex, packetContent, baseEnv = process
   const syntheticStable = buildSyntheticStableText(options.stableLines, options.stableTag);
   let prompt = "Answer the request provided on stdin. Do not use tools.";
   let stdin;
+  let appendSystemPrompt;
 
   if (packetContent !== undefined) {
     prompt = "Review the packet provided on stdin. Do not use tools.";
     stdin = appendDynamicSuffix(packetContent, dynamicSuffix);
+  } else if (options.stableLocation === APPEND_SYSTEM_STABLE_LOCATION) {
+    appendSystemPrompt = syntheticStable;
+    stdin = withReturnOkInstruction("", dynamicSuffix);
   } else if (options.stableLocation === "prompt") {
     prompt = syntheticStable;
     stdin = withReturnOkInstruction("", dynamicSuffix);
@@ -121,7 +159,7 @@ export function buildRunSpec(options, runIndex, packetContent, baseEnv = process
 
   return {
     label: `run-${runIndex + 1}`,
-    args: buildClaudeArgs(options, prompt),
+    args: buildClaudeArgs(options, prompt, appendSystemPrompt),
     stdin,
     env: {
       ...baseEnv,
@@ -153,6 +191,7 @@ async function main() {
     console.log(usageText());
     return;
   }
+  await verifyClaudeFlagSupport(options);
 
   const packetContent = options.packetFile
     ? await readFile(options.packetFile, "utf8")
@@ -165,7 +204,13 @@ async function main() {
     results.push(summarizeRun({ ...result, label: spec.label }));
   }
 
-  const output = {
+  const output = buildBenchmarkOutput(options, packetContent, results);
+
+  console.log(JSON.stringify(output, null, 2));
+}
+
+export function buildBenchmarkOutput(options, packetContent, results) {
+  return {
     model: options.model,
     effort: options.effort,
     tools: options.tools,
@@ -173,6 +218,11 @@ async function main() {
     stableLines: packetContent === undefined ? options.stableLines : undefined,
     stableLocation: packetContent === undefined ? options.stableLocation : "packet-file",
     stableTag: packetContent === undefined ? options.stableTag : undefined,
+    appendSystemPromptBytes:
+      packetContent === undefined && options.stableLocation === APPEND_SYSTEM_STABLE_LOCATION
+        ? byteLength(buildSyntheticStableText(options.stableLines, options.stableTag))
+        : undefined,
+    excludeDynamicSystemPromptSections: options.excludeDynamicSystemPromptSections || undefined,
     dynamicMode: options.dynamicMode,
     cacheTtl: options.cacheTtl,
     packetFile: options.packetFile
@@ -183,8 +233,6 @@ async function main() {
       : undefined,
     results
   };
-
-  console.log(JSON.stringify(output, null, 2));
 }
 
 function requiresValue(arg) {
@@ -236,6 +284,69 @@ function buildSyntheticStableText(stableLines, stableTag) {
     { length: stableLines },
     (_, index) => `${prefix} LINE ${String(index).padStart(4, "0")}: Keep this line identical across calls.`
   ).join("\n");
+}
+
+export async function verifyClaudeFlagSupport(
+  options,
+  command = "claude",
+  readHelp = readClaudePrintHelp
+) {
+  const requiredFlags = [];
+  if (options.stableLocation === APPEND_SYSTEM_STABLE_LOCATION) {
+    requiredFlags.push("--append-system-prompt");
+  }
+  if (options.excludeDynamicSystemPromptSections) {
+    requiredFlags.push("--exclude-dynamic-system-prompt-sections");
+  }
+  if (!requiredFlags.length) {
+    return;
+  }
+
+  const helpText = await readHelp(command);
+  const missing = requiredFlags.filter((flag) => !helpContainsFlag(helpText, flag));
+  if (missing.length) {
+    throw new Error(`Claude help does not advertise required flag(s): ${missing.join(", ")}`);
+  }
+}
+
+function helpContainsFlag(helpText, flag) {
+  const escaped = flag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(^|[^A-Za-z0-9_-])${escaped}\\b`, "m").test(helpText);
+}
+
+function readClaudePrintHelp(command) {
+  return new Promise((resolve, reject) => {
+    let output = "";
+    let settled = false;
+    let timer;
+    const finish = (callback, value) => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      clearTimeout(timer);
+      callback(value);
+    };
+    const child = spawn(command, ["--help"], {
+      shell: false,
+      stdio: ["ignore", "pipe", "pipe"]
+    });
+    timer = setTimeout(() => {
+      child.kill("SIGKILL");
+      finish(reject, new Error(`Claude help check timed out after ${CLAUDE_HELP_TIMEOUT_MS}ms`));
+    }, CLAUDE_HELP_TIMEOUT_MS);
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => {
+      output += chunk;
+    });
+    child.stderr.on("data", (chunk) => {
+      output += chunk;
+    });
+    child.on("error", (error) => finish(reject, error));
+    child.on("close", () => finish(resolve, output));
+  });
 }
 
 function appendDynamicSuffix(value, suffix) {
@@ -372,11 +483,14 @@ function usageText() {
     "  --tools <tools>                 Claude Code tools, default Read",
     "  --runs <count>                  Sequential runs, default 2",
     "  --stable-lines <count>          Synthetic stable lines, default 200",
-    "  --stable-location <stdin|prompt> Synthetic stable content location, default stdin",
+    "  --stable-location <stdin|prompt|append-system>",
+    "                                  Synthetic stable content location, default stdin",
     "  --stable-tag <tag>              Lowercase base36 tag for synthetic lines; rejected with --packet-file",
     "  --dynamic-mode <same|suffix>    Reuse or mutate dynamic suffix, default suffix",
     "  --cache-ttl <1h|5m>             Prompt cache hint, default 1h",
     "  --packet-file <path>            Read a real preview packet and send it via stdin",
+    "  --exclude-dynamic-system-prompt-sections",
+    "                                  Ask Claude Code to move default dynamic system prompt sections into the first user message",
     "  --timeout-ms <ms>               Per-run timeout, default 180000",
     "",
     "For packet-file experiments, generate a packet with:",
