@@ -3,7 +3,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { RunClaudeReviewDeps } from "../runner/claude.js";
 import { runClaudeReview } from "../runner/claude.js";
 import { formatReviewResult } from "../review/format.js";
-import { CcReviewInputBaseSchema, CcReviewInputSchema, CcReviewOutputSchema } from "../review/schema.js";
+import { CcReviewInputSchema, CcReviewOutputSchema } from "../review/schema.js";
 import { createProgressReporter } from "./progress.js";
 
 export interface RegisterCcReviewToolDeps {
@@ -21,8 +21,8 @@ export function registerCcReviewTool(
     {
       title: "Claude Code Review",
       description:
-        "Run Claude Code as an external reviewer for Codex plans, diffs, or documents. Use reviewProfile=read_only for an opt-in read/search-tools profile with slimmer packet routing.",
-      inputSchema: CcReviewInputBaseSchema.shape,
+        "Run Claude Code as an external reviewer for Codex plans, diffs, or documents.",
+      inputSchema: CcReviewInputSchema.shape,
       outputSchema: CcReviewOutputSchema.shape,
       annotations: {
         readOnlyHint: true,

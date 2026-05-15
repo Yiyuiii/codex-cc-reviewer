@@ -3,7 +3,6 @@ import { CcReviewInputSchema, type CcReviewInput } from "../review/schema.js";
 
 export interface LocalPreviewOptions {
   task?: string;
-  reviewProfile?: string;
   context?: string;
   prompt?: string;
   originalGoal?: string;

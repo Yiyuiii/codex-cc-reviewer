@@ -10,7 +10,6 @@ import type { CcReviewInput } from "../src/review/schema.js";
 
 const baseInput: CcReviewInput = {
   task: "review_plan",
-  reviewProfile: "default",
   context: "Review this plan.",
   model: "opus",
   effort: "max",

@@ -199,7 +199,7 @@ Follow-up conclusion:
 Purpose:
 
 - Test whether stable reviewer instructions become cache-useful when moved from stdin packet content into Claude Code `--append-system-prompt`.
-- Test whether a read-only tool profile can materially reduce Claude Code's cached tool-prefix footprint while still finding a call-site-sensitive regression in a sanity fixture.
+- Measure how selected Claude Code tool allowlists affect cached tool-prefix footprint in a sanity fixture.
 - Keep production behavior unchanged. The only implementation change in this pass is maintainer research harness support for append-system experiments.
 
 Plan-review controls:
@@ -275,10 +275,10 @@ New results:
 Interpretation:
 
 - `Read,Grep,Glob` warmed to `14790` read tokens, which is `7927` fewer than `default` and `1699` more than `Read` alone.
-- The `default` versus `Read,Grep,Glob` delta exceeds the material movement threshold. This is a real cost surface for an opt-in read-only profile.
-- `Grep,Glob` without `Read` did not show cache reads in this two-run cell and is not a credible review profile by itself.
+- The `default` versus `Read,Grep,Glob` delta exceeds the material movement threshold for cached prefix size.
+- `Grep,Glob` without `Read` did not show cache reads in this two-run cell and is not a credible review tool set by itself.
 - Without `Read`, the reviewer cannot pull full file contents beyond grep snippets, so cross-function reasoning and call-site verification would regress.
-- This classification does not prove review quality. It only says a read/search-only profile can reduce Claude Code's cached tool-prefix footprint relative to `default`.
+- This classification does not prove review quality. It only says the `Read,Grep,Glob` tool set can reduce Claude Code's cached tool-prefix footprint relative to `default`.
 
 Tool-selective fixture sanity check:
 
@@ -291,23 +291,23 @@ Fixture:
 
 Review runs:
 
-| Profile | Tools | maxContextChars | Result | Tool activity | cache read tokens | costUsd |
+| Cell | Tools | maxContextChars | Result | Tool activity | cache read tokens | costUsd |
 | --- | --- | ---: | --- | --- | ---: | ---: |
-| read-only sanity | `Read,Grep,Glob` | 1200 | Found blocker regression | Used `Glob`, `Read`, and `Grep` to inspect caller and test | 99466 | 0.258273 |
+| narrow-tools sanity | `Read,Grep,Glob` | 1200 | Found blocker regression | Used `Glob`, `Read`, and `Grep` to inspect caller and test | 99466 | 0.258273 |
 | default sanity | `default` | 1200 | Found blocker regression | Used `Read` and `Bash` | 62457 | 0.2518335 |
 
 Interpretation:
 
-- The read-only profile passed this no-regression sanity fixture: it used search/read tools and found the same seeded call-site regression as default tools.
-- This is not statistical proof that read-only review quality matches default. It is only evidence that `Read,Grep,Glob` is capable of the intended manifest-plus-tool workflow on a small call-site-sensitive case.
-- The fixture's net cost did not favor read-only: read-only cost `$0.258273` versus default `$0.2518335`, because tool round-trips outweighed the smaller minimal prefix in this small case. Treat the prefix delta as a workload-dependent opportunity, not a guaranteed cost reduction.
-- The default profile remains better for high-risk reviews that need Bash, tests, generated commands, or broader investigation.
+- The narrow-tools cell passed this no-regression sanity fixture: it used search/read tools and found the same seeded call-site regression as default tools.
+- This is not statistical proof that narrow tool review quality matches default. It is only evidence that `Read,Grep,Glob` is capable of the intended manifest-plus-tool workflow on a small call-site-sensitive case.
+- The fixture's net cost did not favor the narrow tool set: `$0.258273` versus default `$0.2518335`, because tool round-trips outweighed the smaller minimal prefix in this small case. Treat the prefix delta as workload-dependent research evidence, not a guaranteed cost reduction.
+- Default tools remain better for high-risk reviews that need Bash, tests, generated commands, or broader investigation.
 
 Follow-up conclusion:
 
 - Append-system prompt placement is a dead lever for repeat-call cache/cost in Claude Code `2.1.140`, even with `--exclude-dynamic-system-prompt-sections`.
 - `--exclude-dynamic-system-prompt-sections` itself changes the reusable wrapper prefix and may be worth future cross-workspace cache research, but it does not make user-controlled append-system content cache-readable in this path.
-- A read-only profile using `Read,Grep,Glob` has a material minimal-prefix token advantage over `default`, but net review cost is workload-dependent. In the fixture sanity check it found the same seeded blocker while costing slightly more than default.
+- `Read,Grep,Glob` has a material minimal-prefix token advantage over `default`, but net review cost is workload-dependent. In the fixture sanity check it found the same seeded blocker while costing slightly more than default.
 - Do not implement a production prompt-placement change from this evidence.
 - Reopen prompt-placement cache research only if a future Claude Code version exposes cache-control placement, changes append-system cache behavior, or supports passing appended system prompt content outside argv with explicit cache diagnostics.
 
@@ -326,7 +326,7 @@ The evidence does not support that hypothesis:
 - The fixed cache reads scale materially with Claude Code's tool set: empty tools warmed to 12,185 read tokens, `Read` to 13,091, and `default` to 22,717.
 - The fixed cache reads come from Claude Code's own stable wrapper/tool prefix, not the review packet body.
 - Moving synthetic stable content to `--append-system-prompt` did not make that content cache-readable after the Claude Code wrapper was warm.
-- `Read,Grep,Glob` materially reduces the cached tool-prefix footprint versus `default` and passed a small call-site-regression sanity fixture, but the fixture's net cost was not lower in the single sanity run. This makes an opt-in read-only profile the best remaining product candidate to evaluate, not a proven cost reduction.
+- `Read,Grep,Glob` materially reduces the cached tool-prefix footprint versus `default` and passed a small call-site-regression sanity fixture, but the fixture's net cost was not lower in the single sanity run. This remains research evidence, not a release feature.
 - Repeated calls did not materially reduce cost in the measured cells.
 
-Do not implement packet reorder or append-system prompt placement for repeat-call cost. Keep the observability instrumentation and benchmark harness for future Claude Code behavior changes. If product work continues, prioritize an opt-in read-only/reduced-tools profile and evaluate it as a quality/capability tradeoff, not as a cache-mechanism change.
+Do not implement packet reorder or append-system prompt placement for repeat-call cost. Keep the observability instrumentation and benchmark harness for future Claude Code behavior changes. Future cost work can revisit tool-set policy only with stronger quality and cost evidence.

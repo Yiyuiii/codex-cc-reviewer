@@ -11,7 +11,6 @@ describe("runLocalReview", () => {
     const result = await runLocalReview(
       {
         task: "review_diff",
-        reviewProfile: "read_only",
         context: "Review my staged change.",
         tools: "Read, Bash(git diff *)",
         includeGitDiff: true,
@@ -30,7 +29,6 @@ describe("runLocalReview", () => {
 
     expect(result.ok).toBe(true);
     expect(observed?.task).toBe("review_diff");
-    expect(observed?.reviewProfile).toBe("read_only");
     expect(observed?.tools).toEqual(["Read", "Bash(git diff *)"]);
     expect(observed?.includeGitDiff).toBe(true);
     expect(observed?.includeUntrackedContent).toBe(false);

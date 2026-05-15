@@ -74,7 +74,7 @@ describe("registerCcReviewTool", () => {
     expect(result.structuredContent.review).toBe("No findings.");
   });
 
-  it("advertises review profile in the MCP input schema", () => {
+  it("advertises the core MCP input schema", () => {
     let observedConfig: { inputSchema?: Record<string, unknown>; description?: string } | undefined;
     const server = {
       registerTool: (_name: string, config: typeof observedConfig) => {
@@ -84,56 +84,13 @@ describe("registerCcReviewTool", () => {
 
     registerCcReviewTool(server as never);
 
-    expect(observedConfig?.inputSchema).toHaveProperty("reviewProfile");
     expect(observedConfig?.inputSchema).toHaveProperty("tools");
     expect(observedConfig?.inputSchema).toHaveProperty("maxContextChars");
     expect(getSchemaDescription(observedConfig?.inputSchema?.tools)).toContain("Omitted runtime default");
     expect(getSchemaDescription(observedConfig?.inputSchema?.maxContextChars)).toContain(
       "Omitted runtime default"
     );
-    expect(observedConfig?.description).toContain("reviewProfile=read_only");
-  });
-
-  it("applies read_only defaults through the MCP callback parse path", async () => {
-    let callback: ((input: unknown, extra: unknown) => Promise<unknown>) | undefined;
-    let observedInput: unknown;
-    const server = {
-      registerTool: (_name: string, _config: unknown, cb: typeof callback) => {
-        callback = cb;
-      }
-    };
-
-    registerCcReviewTool(server as never, {
-      runReview: async (input) => {
-        observedInput = input;
-        return {
-          ok: true,
-          task: "review_diff",
-          model: "opus",
-          elapsedMs: 1,
-          review: "No findings.",
-          command: ["claude"]
-        } satisfies CcReviewOutput;
-      }
-    });
-
-    await callback?.(
-      {
-        task: "review_diff",
-        context: "Review this diff.",
-        reviewProfile: "read_only"
-      },
-      {
-        signal: new AbortController().signal
-      }
-    );
-
-    expect(observedInput).toMatchObject({
-      reviewProfile: "read_only",
-      tools: ["Read", "Grep", "Glob"],
-      maxContextChars: 60_000,
-      includeUntrackedContent: false
-    });
+    expect(observedConfig?.description).toContain("external reviewer");
   });
 
   it("rejects unknown MCP callback fields before running a review", async () => {

@@ -11,16 +11,12 @@ export const ReviewOutputModeSchema = z.enum(["markdown", "json"]);
 
 export const ClaudeEffortSchema = z.enum(["low", "medium", "high", "max"]);
 
-const REVIEW_PROFILE_DESCRIPTION =
-  "Review preset. default preserves the existing broad review behavior; read_only uses read/search tools and slimmer packet routing.";
 const TOOLS_DESCRIPTION =
-  "Claude Code tool allowlist. Omitted runtime default is [\"default\"], or [\"Read\", \"Grep\", \"Glob\"] with reviewProfile=\"read_only\".";
+  'Claude Code tool allowlist. Omitted runtime default is ["default"]; blank inputs also use this default.';
 const INCLUDE_UNTRACKED_CONTENT_DESCRIPTION =
-  "Whether to embed selected untracked text bodies. Omitted runtime default is task-dependent, or false with reviewProfile=\"read_only\".";
+  "Whether to embed selected untracked text bodies. Omitted runtime default is task-dependent.";
 const MAX_CONTEXT_CHARS_DESCRIPTION =
-  "Budget for variable review packet blocks. Omitted runtime default is 120000, or 60000 with reviewProfile=\"read_only\".";
-
-export const ReviewProfileSchema = z.enum(["default", "read_only"]);
+  "Budget for variable review packet blocks. Omitted runtime default is 120000.";
 
 export const ClaudePermissionModeSchema = z.enum([
   "acceptEdits",
@@ -57,14 +53,22 @@ const ActivityEventSchema = z.object({
   toolInputTruncated: z.boolean().optional()
 });
 
-const ToolsSchema = z.preprocess((value) => {
-  if (typeof value !== "string") return value;
+const ToolsSchema = z
+  .preprocess((value) => {
+    if (Array.isArray(value) && value.length === 0) {
+      return ["default"];
+    }
 
-  return value
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
-}, z.array(z.string().min(1)).min(1, "tools must not be empty when provided").optional());
+    if (typeof value !== "string") return value;
+
+    const tools = value
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+
+    return tools.length ? tools : ["default"];
+  }, z.array(z.string().min(1)).default(["default"]))
+  .describe(TOOLS_DESCRIPTION);
 
 const NonEmptyStringSchema = z.string().trim().min(1);
 
@@ -79,13 +83,8 @@ const StringListSchema = z.preprocess((value) => {
   value?.length ? value : undefined
 ).optional();
 
-/**
- * Pre-transform MCP advertisement shape only.
- * Runtime callers must parse with CcReviewInputSchema so profile-aware defaults are applied.
- */
-export const CcReviewInputBaseSchema = z.object({
+export const CcReviewInputSchema = z.object({
   task: ReviewTaskSchema,
-  reviewProfile: ReviewProfileSchema.default("default").describe(REVIEW_PROFILE_DESCRIPTION),
   prompt: NonEmptyStringSchema.optional(),
   originalGoal: NonEmptyStringSchema.optional(),
   reviewFocus: NonEmptyStringSchema.optional(),
@@ -98,7 +97,7 @@ export const CcReviewInputBaseSchema = z.object({
   effort: ClaudeEffortSchema.default("max"),
   output: ReviewOutputModeSchema.default("markdown"),
   permissionMode: ClaudePermissionModeSchema.default("bypassPermissions"),
-  tools: ToolsSchema.describe(TOOLS_DESCRIPTION),
+  tools: ToolsSchema,
   cwd: z.string().trim().min(1).optional(),
   includeGitDiff: z.boolean().default(false),
   includeGitStatus: z.boolean().default(false),
@@ -110,7 +109,7 @@ export const CcReviewInputBaseSchema = z.object({
     .int()
     .min(1_000)
     .max(1_000_000)
-    .optional()
+    .default(120_000)
     .describe(MAX_CONTEXT_CHARS_DESCRIPTION),
   stream: z.boolean().default(true),
   includePartialMessages: z.boolean().default(true),
@@ -118,19 +117,6 @@ export const CcReviewInputBaseSchema = z.object({
   verbose: z.boolean().default(true),
   cacheTtl: CacheTtlSchema.default("1h")
 }).strict();
-
-export const CcReviewInputSchema = CcReviewInputBaseSchema.transform((input) => {
-  const readOnly = input.reviewProfile === "read_only";
-  const tools = input.tools ?? (readOnly ? ["Read", "Grep", "Glob"] : ["default"]);
-
-  return {
-    ...input,
-    tools,
-    includeUntrackedContent:
-      input.includeUntrackedContent ?? (readOnly ? false : undefined),
-    maxContextChars: input.maxContextChars ?? (readOnly ? 60_000 : 120_000)
-  };
-});
 
 export const CcReviewOutputSchema = z.object({
   ok: z.boolean(),
