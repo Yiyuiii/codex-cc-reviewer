@@ -4,6 +4,12 @@
 
 - 暂无条目。
 
+## 1.0.0
+
+- 在重启后的本地 Codex 会话中验证已发布到 npm `next` 的包后，提升 `v1.0.0-rc.0`。
+- 确认重启后的 `cc_review` smoke 使用了从 `codex-cc-reviewer@next` 加载的前台 MCP tool，并引用了仓库 release gate 证据。
+- 建立初始 1.x 稳定线，覆盖受支持的 `cc_review` MCP 输入/输出字段、CLI 命令、package manifest，以及 GitHub Actions 发布流程；本地 npm 发布仍只用于 dry-run 验证。
+
 ## 1.0.0-rc.0
 
 此 release candidate 相比 0.3.1 不引入 breaking behavior 或 API 变更。它开启 1.x 稳定线：受支持的 `cc_review` MCP 输入/输出字段、CLI 命令、package manifest，以及 GitHub Actions 发布流程在 1.x 期间应保持向后兼容，除非未来 changelog 明确标记 breaking change。

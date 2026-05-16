@@ -14,7 +14,7 @@ const program = new Command();
 program
   .name("codex-cc-reviewer")
   .description("Use Claude Code as an external reviewer from Codex.")
-  .version("1.0.0-rc.0");
+  .version("1.0.0");
 
 program
   .command("serve")

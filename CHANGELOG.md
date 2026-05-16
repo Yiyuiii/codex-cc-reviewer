@@ -4,6 +4,12 @@
 
 - No entries yet.
 
+## 1.0.0
+
+- Promote `v1.0.0-rc.0` after validating the published npm `next` package in a restarted local Codex session.
+- Confirm the post-restart `cc_review` smoke exercised the foreground MCP tool loaded from `codex-cc-reviewer@next` and referenced repository release-gate evidence.
+- Establish the initial 1.x stability line for supported `cc_review` MCP input/output fields, CLI commands, package manifest, and GitHub Actions publishing flow; local npm publishing remains dry-run verification only.
+
 ## 1.0.0-rc.0
 
 This release candidate does not introduce breaking behavior or API changes relative to 0.3.1. It starts the 1.x stability line: supported `cc_review` MCP input/output fields, CLI commands, package manifest, and GitHub Actions publishing flow are expected to remain backward-compatible throughout 1.x unless a future changelog explicitly marks a breaking change.

@@ -14,6 +14,10 @@ function sliceBetween(value: string, start: string, end: string): string {
   return value.slice(startIndex, endIndex);
 }
 
+function escapedRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 describe("release assurance configuration", () => {
   it("keeps package, CLI, and MCP server versions aligned", async () => {
     const packageJson = JSON.parse(await readWorkspaceFile("package.json")) as {
@@ -26,8 +30,9 @@ describe("release assurance configuration", () => {
     };
     const index = await readWorkspaceFile("src/index.ts");
     const server = await readWorkspaceFile("src/mcp/server.ts");
-    const cliVersion = index.match(/\.version\("([^"]+)"\)/)?.[1];
-    const mcpServerVersion = server.match(/new McpServer\(\{[^}]*version:\s*"([^"]+)"/s)?.[1];
+    const cliVersion = index.match(/\.name\("codex-cc-reviewer"\)[\s\S]*?\.version\("([^"]+)"\)/)?.[1];
+    const mcpServerVersion = server.match(/new McpServer\(\{[^}]*version:\s*"([^"]+)"/)?.[1];
+    const changelogHeading = new RegExp(`^## ${escapedRegExp(packageJson.version)}$`, "m");
 
     expect(packageJson.version).toMatch(/^\d+\.\d+\.\d+(?:-[a-z0-9.]+)?$/);
     expect(packageLockJson.lockfileVersion).toBe(3);
@@ -35,8 +40,8 @@ describe("release assurance configuration", () => {
     expect(packageLockJson.packages[""].version).toBe(packageJson.version);
     expect(cliVersion).toBe(packageJson.version);
     expect(mcpServerVersion).toBe(packageJson.version);
-    expect(await readWorkspaceFile("CHANGELOG.md")).toContain(`## ${packageJson.version}`);
-    expect(await readWorkspaceFile("CHANGELOG.zh-CN.md")).toContain(`## ${packageJson.version}`);
+    expect(await readWorkspaceFile("CHANGELOG.md")).toMatch(changelogHeading);
+    expect(await readWorkspaceFile("CHANGELOG.zh-CN.md")).toMatch(changelogHeading);
   });
 
   it("exposes local preflight scripts with pack and CLI smoke checks", async () => {
